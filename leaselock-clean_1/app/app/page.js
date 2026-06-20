@@ -34,16 +34,178 @@ function downscale(file, max = 1100) {
   })
 }
 
+/* ============================================================
+   PERSONALIZATION QUIZ
+   5 steps matching the design reference:
+   1. Pets
+   2. Roommates
+   3. Co-signer / guarantor
+   4. Early departure / sublet
+   5. Furnished unit
+   ============================================================ */
+
+const QUIZ_STEPS = [
+  {
+    id: 'pets',
+    step: '1 OF 5',
+    icon: '🐾',
+    question: 'Do you have pets?',
+    subtext: 'This tailors your lease review and what we flag as risky for you.',
+    options: [
+      { value: 'none', label: 'No pets' },
+      { value: 'yes', label: 'Yes, I have a pet' },
+    ],
+  },
+  {
+    id: 'roommates',
+    step: '2 OF 5',
+    icon: '👥',
+    question: 'Are you living with roommates?',
+    subtext: 'This tailors your lease review and what we flag as risky for you.',
+    options: [
+      { value: 'solo', label: 'Just me' },
+      { value: 'shared', label: 'Yes, on a shared lease' },
+    ],
+  },
+  {
+    id: 'cosigner',
+    step: '3 OF 5',
+    icon: '✅',
+    question: 'Do you have a co-signer or guarantor?',
+    subtext: 'This tailors your lease review and what we flag as risky for you.',
+    options: [
+      { value: 'none', label: 'No co-signer' },
+      { value: 'yes', label: 'Yes, a parent/guarantor' },
+    ],
+  },
+  {
+    id: 'departure',
+    step: '4 OF 5',
+    icon: '🚪',
+    question: "Any chance you'll need to leave early or sublet?",
+    subtext: 'This tailors your lease review and what we flag as risky for you.',
+    options: [
+      { value: 'full', label: 'Staying the full term' },
+      { value: 'maybe', label: 'Possibly — study abroad / internship' },
+    ],
+  },
+  {
+    id: 'furnished',
+    step: '5 OF 5',
+    icon: '🛋️',
+    question: 'Is the unit furnished?',
+    subtext: 'This tailors your move-in inspection checklist and what items we prompt you to document.',
+    options: [
+      { value: 'no', label: 'Unfurnished' },
+      { value: 'yes', label: 'Yes, fully or partially furnished' },
+    ],
+  },
+]
+
+function Quiz({ onComplete }) {
+  const [step, setStep] = useState(0)
+  const [answers, setAnswers] = useState({})
+  const [selected, setSelected] = useState(null)
+
+  const current = QUIZ_STEPS[step]
+  const pct = ((step) / QUIZ_STEPS.length) * 100
+
+  function pick(val) {
+    setSelected(val)
+    // Short delay so user sees the selection before advancing
+    setTimeout(() => {
+      const next = { ...answers, [current.id]: val }
+      setAnswers(next)
+      if (step < QUIZ_STEPS.length - 1) {
+        setStep(s => s + 1)
+        setSelected(null)
+      } else {
+        save('rr_profile', next)
+        onComplete(next)
+      }
+    }, 280)
+  }
+
+  return (
+    <div className="quiz-shell">
+      {/* Progress bar */}
+      <div className="quiz-prog-track">
+        {QUIZ_STEPS.map((_, i) => (
+          <div
+            key={i}
+            className="quiz-prog-seg"
+            style={{ background: i <= step ? 'var(--brand-accent)' : 'var(--line)' }}
+          />
+        ))}
+      </div>
+
+      <div className="quiz-body">
+        {/* Step label */}
+        <div className="quiz-step-label">SET UP YOUR PROTECTION · {current.step}</div>
+
+        {/* Icon */}
+        <div className="quiz-icon-wrap">
+          <span className="quiz-icon">{current.icon}</span>
+        </div>
+
+        {/* Question */}
+        <h2 className="quiz-q">{current.question}</h2>
+        <p className="quiz-sub">{current.subtext}</p>
+
+        {/* Options */}
+        <div className="quiz-options">
+          {current.options.map(opt => (
+            <button
+              key={opt.value}
+              className={`quiz-opt ${selected === opt.value ? 'quiz-opt-on' : ''}`}
+              onClick={() => pick(opt.value)}
+            >
+              <span className="quiz-opt-label">{opt.label}</span>
+              <span className={`quiz-opt-radio ${selected === opt.value ? 'quiz-opt-radio-on' : ''}`}>
+                {selected === opt.value && <span className="quiz-opt-check">✓</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ---------- Dashboard ---------- */
-function Dashboard({ go }) {
+function Dashboard({ go, profile }) {
   const [cal, setCal] = useState([])
   const [maint, setMaint] = useState([])
   const [rent, setRent] = useState([])
   useEffect(() => { setCal(load('ll_cal', [])); setMaint(load('ll_maint', [])); setRent(load('ll_rent', [])) }, [])
   const upcoming = [...cal].filter(e => daysUntil(e.date) >= 0).sort((a, b) => daysUntil(a.date) - daysUntil(b.date)).slice(0, 4)
   const openIssues = maint.filter(m => m.status !== 'done').length
+
+  // Personalized tip based on profile
+  const tips = []
+  if (profile?.pets === 'yes') tips.push({ icon: '🐾', text: 'You noted you have a pet. Make sure your lease clearly states any pet fees, deposits, and restrictions — these are common dispute triggers.' })
+  if (profile?.roommates === 'shared') tips.push({ icon: '👥', text: 'On a shared lease, you may be jointly liable for the full rent. Check your lease for "joint and several" liability language.' })
+  if (profile?.cosigner === 'yes') tips.push({ icon: '✅', text: 'Your guarantor is on the hook if you miss rent. Make sure they understand the scope of their commitment before signing.' })
+  if (profile?.departure === 'maybe') tips.push({ icon: '🚪', text: "You flagged a possible early departure. Check your lease's subletting and early termination clauses — and the fees attached." })
+  if (profile?.furnished === 'yes') tips.push({ icon: '🛋️', text: "Furnished units mean more to document at move-in. Use the move-in inspection to photograph every provided item's condition." })
+
   return (
     <>
+      {tips.length > 0 && (
+        <div className="c" style={{ background: 'var(--mint-soft)', border: '1px solid var(--line-strong)' }}>
+          <h2>Your personalized heads-ups</h2>
+          <p className="d">Based on your setup, here's what to watch for.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {tips.map((t, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 14.5 }}>
+                <span style={{ fontSize: 18, lineHeight: 1.4 }}>{t.icon}</span>
+                <span>{t.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="dash-tiles">
         <div className="tile"><div className="t-lab">Upcoming deadlines</div><div className="t-num brand">{cal.filter(e => daysUntil(e.date) >= 0).length}</div></div>
         <div className="tile"><div className="t-lab">Open issues</div><div className="t-num">{openIssues}</div></div>
@@ -83,17 +245,28 @@ function Dashboard({ go }) {
 }
 
 /* ---------- Lease review (rich JSON) ---------- */
-function LeaseReview() {
+function LeaseReview({ profile }) {
   const [text, setText] = useState('')
   const [data, setData] = useState(null)
   const [raw, setRaw] = useState('')
   const [loading, setLoading] = useState(false)
+
   async function run() {
     if (!text.trim()) return
     setLoading(true); setData(null); setRaw('')
+
+    // Build personalization context from profile
+    const ctx = []
+    if (profile?.pets === 'yes') ctx.push('the renter has a pet')
+    if (profile?.roommates === 'shared') ctx.push('this is a shared lease with roommates')
+    if (profile?.cosigner === 'yes') ctx.push('there is a parent/guarantor co-signing')
+    if (profile?.departure === 'maybe') ctx.push('the renter may need to leave early or sublet')
+    if (profile?.furnished === 'yes') ctx.push('the unit is furnished')
+    const ctxStr = ctx.length > 0 ? `Additional context about this renter: ${ctx.join(', ')}. Prioritize flags relevant to these circumstances.` : ''
+
     try {
       const out = await callAPI(
-        'You are a renter protection assistant. Analyze the lease and respond with ONLY valid JSON, no markdown fences, in this exact shape: {"summary":"2 to 3 sentence plain English summary","score":<integer 0-100 how renter-friendly this lease is, higher is safer>,"verdict":"short phrase like Sign with caution","flags":[{"title":"short","detail":"one sentence","severity":"high|medium|low"}],"questions":["question to ask landlord"]}. Include 3 to 6 flags and 3 to 5 questions.',
+        `You are a renter protection assistant. ${ctxStr} Analyze the lease and respond with ONLY valid JSON, no markdown fences, in this exact shape: {"summary":"2 to 3 sentence plain English summary","score":<integer 0-100 how renter-friendly this lease is, higher is safer>,"verdict":"short phrase like Sign with caution","flags":[{"title":"short","detail":"one sentence","severity":"high|medium|low"}],"questions":["question to ask landlord"]}. Include 3 to 6 flags and 3 to 5 questions.`,
         'Lease:\n\n' + text)
       const clean = out.replace(/```json|```/g, '').trim()
       try { setData(JSON.parse(clean)) } catch { setRaw(out) }
@@ -156,7 +329,9 @@ function LeaseReview() {
 
 /* ---------- Move-in (photos + vision) ---------- */
 const ROOMS = [['Living room', '🛋️'], ['Kitchen', '🍳'], ['Bedroom', '🛏️'], ['Bathroom', '🚿'], ['Entryway', '🚪'], ['Other', '📦']]
-function MoveIn() {
+const FURNISHED_ITEMS = [['Sofa', '🛋️'], ['Dining table', '🍽️'], ['Bed frame', '🛏️'], ['Mattress', '😴'], ['Dresser', '🗄️'], ['TV', '📺']]
+
+function MoveIn({ profile }) {
   const [room, setRoom] = useState('Living room')
   const [cond, setCond] = useState('')
   const [notes, setNotes] = useState('')
@@ -179,9 +354,10 @@ function MoveIn() {
     setLoading(true); setReport('Looking at your photos and writing the report...')
     const imgs = entries.flatMap(e => e.photos)
     const log = entries.map(e => `${e.room}: ${e.cond}. Notes: ${e.notes}. Photos: ${e.photos.length}.`).join('\n')
+    const furnishedNote = profile?.furnished === 'yes' ? ' Note: the unit is furnished — also assess the condition of provided furniture items.' : ''
     try {
       const out = await callAPI(
-        'You are a renter protection assistant reviewing move-in photos. Look carefully at each photo and describe visible existing damage, wear, stains, or issues. Then write a professional, factual move-in condition report organized by room, under 280 words. Plain text, no markdown symbols.',
+        `You are a renter protection assistant reviewing move-in photos. Look carefully at each photo and describe visible existing damage, wear, stains, or issues.${furnishedNote} Then write a professional, factual move-in condition report organized by room, under 280 words. Plain text, no markdown symbols.`,
         'Condition log. Review the attached photos and produce the report:\n\n' + log, imgs)
       setReport(out)
     } catch { setReport('Something went wrong. Please try again.') }
@@ -193,6 +369,12 @@ function MoveIn() {
       <div className="c">
         <h2>Move-in photo report</h2>
         <p className="d">Go room by room, add photos, and our AI describes the existing damage it sees. This is the proof that protects your deposit.</p>
+        {profile?.furnished === 'yes' && (
+          <div style={{ background: 'var(--mint-soft)', border: '1px solid var(--line-strong)', borderRadius: 12, padding: '12px 16px', marginBottom: 18, fontSize: 14, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <span>🛋️</span>
+            <span>Your unit is furnished. Make sure to document each provided item in your photos and notes.</span>
+          </div>
+        )}
         <span className="lab">Room</span>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(96px,1fr))', gap: 8, marginBottom: 20 }}>
           {ROOMS.map(([n, i]) => (
@@ -246,46 +428,6 @@ function MoveIn() {
           {report && <div className="res">{report}</div>}
         </div>
       )}
-    </>
-  )
-}
-
-/* ---------- Messages ---------- */
-const TYPES = ['Report existing damage', 'Request a repair', 'Ask about lease terms', 'Request deposit return', 'Dispute a charge', 'Follow up on maintenance']
-function Messages() {
-  const [type, setType] = useState(TYPES[0])
-  const [tone, setTone] = useState('Professional')
-  const [ctx, setCtx] = useState('')
-  const [name, setName] = useState('')
-  const [out, setOut] = useState(''); const [loading, setLoading] = useState(false); const [copied, setCopied] = useState(false)
-  async function run() {
-    if (!ctx.trim()) { alert('Describe the situation first.'); return }
-    setLoading(true); setOut('Drafting your message...')
-    try {
-      setOut(await callAPI(
-        `You are a renter communication assistant. Write a ${tone.toLowerCase()} message that protects the renter and creates a written record. Under 150 words. Include a subject line at the top. Plain text, no markdown symbols.`,
-        `Write a message to ${name || 'my landlord'} to ${type.toLowerCase()}.\n\nContext: ${ctx}`))
-    } catch { setOut('Something went wrong. Please try again.') }
-    setLoading(false)
-  }
-  function copy() { navigator.clipboard.writeText(out).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1600) }
-  const pill = (active) => ({ padding: '8px 14px', borderRadius: 999, fontSize: 13, cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 500, border: active ? '1.5px solid var(--brand)' : '1px solid var(--line-strong)', background: active ? 'var(--mint-soft)' : '#fbfdfc', color: active ? 'var(--brand)' : 'var(--ink-soft)' })
-  return (
-    <>
-      <div className="c">
-        <h2>Landlord message generator</h2>
-        <p className="d">Pick the situation and the tone, describe what happened, and get a message ready to send.</p>
-        <span className="lab">Message type</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>{TYPES.map(t => <button key={t} style={pill(type === t)} onClick={() => setType(t)}>{t}</button>)}</div>
-        <span className="lab">Tone</span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>{['Professional', 'Friendly', 'Firm'].map(t => <button key={t} style={pill(tone === t)} onClick={() => setTone(t)}>{t}</button>)}</div>
-        <span className="lab">What happened</span>
-        <textarea className="ta2" style={{ minHeight: 110, marginBottom: 14 }} placeholder="Describe the situation in your own words..." value={ctx} onChange={e => setCtx(e.target.value)} />
-        <span className="lab">Landlord name (optional)</span>
-        <input className="inp" style={{ marginBottom: 16 }} placeholder="e.g. Mr. Johnson" value={name} onChange={e => setName(e.target.value)} />
-        <button className="bp" onClick={run} disabled={loading}>{loading ? <><i className="spin2" /> Drafting</> : 'Draft my message'}</button>
-      </div>
-      {out && <div className="c"><h2>Your message</h2><div className="res">{out}</div><div style={{ marginTop: 14 }}><button className="bg2" onClick={copy}>{copied ? '✓ Copied' : 'Copy message'}</button></div></div>}
     </>
   )
 }
@@ -461,23 +603,70 @@ function MoveInLauncher() {
   )
 }
 
-/* ---------- shell ---------- */
+/* ---------- App shell ---------- */
+// Messages tab removed
 const NAV = [
-  ['home', 'Dashboard', '◫'], ['lease', 'Lease review', '📄'], ['movein', 'Move-in report', '📸'],
-  ['message', 'Landlord messages', '✉️'], ['calendar', 'Lease calendar', '📅'], ['maint', 'Maintenance', '🔧'], ['rent', 'Rent log', '💵'],
+  ['home', 'Dashboard', '◫'],
+  ['lease', 'Lease review', '📄'],
+  ['movein', 'Move-in report', '📸'],
+  ['calendar', 'Lease calendar', '📅'],
+  ['maint', 'Maintenance', '🔧'],
+  ['rent', 'Rent log', '💵'],
 ]
-const TITLES = { home: 'Dashboard', lease: 'Lease review', movein: 'Move-in report', message: 'Landlord messages', calendar: 'Lease calendar', maint: 'Maintenance tracker', rent: 'Rent log' }
+const TITLES = {
+  home: 'Dashboard',
+  lease: 'Lease review',
+  movein: 'Move-in report',
+  calendar: 'Lease calendar',
+  maint: 'Maintenance tracker',
+  rent: 'Rent log',
+}
+
 export default function App() {
   const [tab, setTab] = useState('home')
+  const [profile, setProfile] = useState(null)
+  const [quizDone, setQuizDone] = useState(false)
+
+  useEffect(() => {
+    const saved = load('rr_profile', null)
+    if (saved) {
+      setProfile(saved)
+      setQuizDone(true)
+    }
+  }, [])
+
+  function handleQuizComplete(answers) {
+    setProfile(answers)
+    setQuizDone(true)
+  }
+
+  // Show quiz until completed
+  if (!quizDone) {
+    return (
+      <>
+        <style>{`@keyframes ll-spin{to{transform:rotate(360deg)}}`}</style>
+        <Quiz onComplete={handleQuizComplete} />
+      </>
+    )
+  }
+
   return (
     <div className="ax">
       <style>{`@keyframes ll-spin{to{transform:rotate(360deg)}}`}</style>
       <aside className="ax-side">
-        <Link href="/" className="ax-brand"><span className="ax-mark">🔒</span> LeaseLock</Link>
+        <Link href="/" className="ax-brand"><span className="ax-mark">🏠</span> RenterReady</Link>
         <nav className="ax-nav">
           {NAV.map(([k, l, i]) => <button key={k} className={`ax-link ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}><span className="ico">{i}</span>{l}</button>)}
         </nav>
-        <div className="foot"><Link href="/">← Back to site</Link></div>
+        <div className="foot">
+          <button
+            onClick={() => { save('rr_profile', null); setQuizDone(false); setProfile(null) }}
+            style={{ background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 13, cursor: 'pointer', marginBottom: 8, display: 'block' }}
+          >
+            ↺ Redo setup
+          </button>
+          <Link href="/">← Back to site</Link>
+        </div>
       </aside>
       <main className="ax-main">
         <div className="ax-mobnav">
@@ -485,10 +674,9 @@ export default function App() {
         </div>
         <div className="ax-top"><h1>{TITLES[tab]}</h1><Link href="/" style={{ fontSize: 14, color: 'var(--ink-soft)', fontWeight: 500 }}>Home</Link></div>
         <div className="ax-body">
-          {tab === 'home' && <Dashboard go={setTab} />}
-          {tab === 'lease' && <LeaseReview />}
+          {tab === 'home' && <Dashboard go={setTab} profile={profile} />}
+          {tab === 'lease' && <LeaseReview profile={profile} />}
           {tab === 'movein' && <MoveInLauncher />}
-          {tab === 'message' && <Messages />}
           {tab === 'calendar' && <Calendar />}
           {tab === 'maint' && <Maintenance />}
           {tab === 'rent' && <RentLog />}
