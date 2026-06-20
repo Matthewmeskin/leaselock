@@ -1,8 +1,8 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'LeaseLock for Landlords | Locked move-in reports, zero deposit disputes',
-  description: 'Send your tenant one link. They complete a guided AI move-in inspection in five minutes and the report locks with a timestamp. Both sides hold the same record.',
+  title: 'RenterReady | Your lease, your rights, your protection.',
+  description: 'Set up your renter protection in five minutes. AI lease review, guided move-in inspection, maintenance tracking, and the tools every renter needs from day one.',
 }
 
 export default function RootLayout({ children }) {
