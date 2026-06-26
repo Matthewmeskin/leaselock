@@ -52,6 +52,7 @@ export default function Report() {
   const [tenantName, setTenantName] = useState('')
   const [unitAddress, setUnitAddress] = useState('')
   const [reportText, setReportText] = useState('')
+  const [editingReport, setEditingReport] = useState(false)
   const [lockTs, setLockTs] = useState('')
   const [profile, setProfile] = useState(null)
   useEffect(() => {
@@ -383,8 +384,14 @@ export default function Report() {
           </div>
 
           <div className="report-doc">
-            <h3>AI condition report</h3>
-            <div className="body">{reportText}</div>
+            <div className="report-doc-head">
+              <h3>AI condition report</h3>
+              <button className="report-edit-btn no-print" onClick={() => setEditingReport(v => !v)}>{editingReport ? '✓ Done' : '✎ Edit'}</button>
+            </div>
+            {editingReport && <p className="report-edit-hint no-print">Fix anything the AI got wrong. Your edits are saved into the report.</p>}
+            {editingReport
+              ? <textarea className="report-edit-ta" value={reportText} onChange={e => setReportText(e.target.value)} />
+              : <div className="body">{reportText}</div>}
           </div>
 
           {profileRows.length > 0 && (
@@ -430,7 +437,7 @@ export default function Report() {
           )}
 
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }} className="no-print">
-            <button className="bp" onClick={() => window.print()}>Print / save as PDF</button>
+            <button className="bp" onClick={() => { setEditingReport(false); setTimeout(() => window.print(), 60) }}>Print / save as PDF</button>
             <Link href="/app" className="bg2" style={{ padding: '12px 20px', borderRadius: 999, fontSize: 14.5, fontWeight: 600, color: 'var(--brand)', border: '1.5px solid var(--line-strong)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Go to my dashboard</Link>
           </div>
         </div>
