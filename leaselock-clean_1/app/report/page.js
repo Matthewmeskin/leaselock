@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import AddressAutocomplete from '../components/AddressAutocomplete'
+import { profileToReadable } from '../lib/quiz'
 
 async function callAPI(system, user, images) {
   const res = await fetch('/api/claude', {
@@ -52,6 +53,11 @@ export default function Report() {
   const [unitAddress, setUnitAddress] = useState('')
   const [reportText, setReportText] = useState('')
   const [lockTs, setLockTs] = useState('')
+  const [profile, setProfile] = useState(null)
+  useEffect(() => {
+    try { const v = localStorage.getItem('rr_profile'); if (v) setProfile(JSON.parse(v)) } catch {}
+  }, [])
+  const profileRows = profileToReadable(profile)
   const fileRef = useRef()
 
   const [selected, setSelected] = useState(ROOMS.map(r => r.name))
@@ -105,7 +111,9 @@ export default function Report() {
     try {
       const out = await callAPI(
         'You are a renter protection assistant. Review the move-in photos and produce a professional, factual move-in condition report organized by room. Be specific about any damage, stains, or issues visible in the photos. Under 350 words. Plain text, no markdown.',
-        `Unit: ${unitAddress || 'Not provided'}\nTenant: ${tenantName || 'Not provided'}\n\nRoom-by-room log:\n${log}\n\nReview photos and write the report:`,
+        `Unit: ${unitAddress || 'Not provided'}\nTenant: ${tenantName || 'Not provided'}`
+        + (profileRows.length ? `\n\nTenant intake:\n${profileRows.map(r => `- ${r.question} ${r.answer}`).join('\n')}` : '')
+        + `\n\nRoom-by-room log:\n${log}\n\nReview photos and write the report:`,
         allPhotos
       )
       setReportText(out)
@@ -332,6 +340,21 @@ export default function Report() {
             <h3>AI condition report</h3>
             <div className="body">{reportText}</div>
           </div>
+
+          {profileRows.length > 0 && (
+            <div className="report-profile">
+              <h3>Tenant setup</h3>
+              <p className="rp-sub">Intake answers recorded with this report.</p>
+              <div className="tp-grid">
+                {profileRows.map(r => (
+                  <div className="tp-row" key={r.id}>
+                    <span className="tp-q">{r.question}</span>
+                    <span className="tp-a">{r.answer}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {totalPhotos() > 0 && (
             <div className="report-photos">
