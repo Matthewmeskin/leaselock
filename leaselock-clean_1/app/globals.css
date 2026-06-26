@@ -778,3 +778,25 @@ a { color: inherit; text-decoration: none; }
 }
 .report-edit-ta:focus { border-color: var(--brand); }
 @media print { .report-edit-ta { display: none; } }
+
+/* ============ ll-spin global fix + fun report loader ============ */
+@keyframes ll-spin { to { transform: rotate(360deg); } }
+
+.gen-wrap { text-align: center; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; }
+.gen-scene { position: relative; width: 130px; height: 120px; margin-bottom: 22px; }
+.gen-house { font-size: 80px; display: block; animation: gen-bob 2s ease-in-out infinite; }
+.gen-glass { position: absolute; bottom: 4px; left: 4px; font-size: 42px; animation: gen-scan 2.4s ease-in-out infinite; }
+@keyframes gen-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+@keyframes gen-scan {
+  0%   { transform: translate(0, 0) rotate(-10deg); }
+  50%  { transform: translate(74px, -12px) rotate(10deg); }
+  100% { transform: translate(0, 0) rotate(-10deg); }
+}
+.gen-title { font-family: var(--font-display); font-weight: 800; font-size: 24px; margin-bottom: 8px; }
+.gen-msg { color: var(--ink-soft); font-size: 15.5px; min-height: 22px; animation: gen-pop .4s ease; }
+@keyframes gen-pop { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+.gen-dots { display: flex; gap: 7px; margin-top: 20px; }
+.gen-dots span { width: 9px; height: 9px; border-radius: 50%; background: var(--brand); animation: gen-bounce 1s ease-in-out infinite; }
+.gen-dots span:nth-child(2) { animation-delay: .15s; }
+.gen-dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes gen-bounce { 0%, 100% { transform: translateY(0); opacity: .4; } 50% { transform: translateY(-9px); opacity: 1; } }
