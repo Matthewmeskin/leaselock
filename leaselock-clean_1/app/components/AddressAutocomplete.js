@@ -7,6 +7,8 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
   const [active, setActive] = useState(-1)
   const wrapRef = useRef(null)
   const timerRef = useRef(null)
+  const abortRef = useRef(null)
+  const cacheRef = useRef(new Map())
   const skipNextFetch = useRef(false)
 
   useEffect(() => {
@@ -17,22 +19,34 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
     return () => document.removeEventListener('mousedown', onDoc)
   }, [])
 
+  const apply = useCallback((sugg) => {
+    setSuggestions(sugg)
+    setOpen(sugg.length > 0)
+    setActive(-1)
+  }, [])
+
   const fetchSuggestions = useCallback(async (input) => {
+    const key = input.trim().toLowerCase()
+    if (cacheRef.current.has(key)) { apply(cacheRef.current.get(key)); return }
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
     try {
       const res = await fetch('/api/places', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'autocomplete', input }),
+        signal: controller.signal,
       })
       const data = await res.json()
-      setSuggestions(data.suggestions || [])
-      setOpen((data.suggestions || []).length > 0)
-      setActive(-1)
-    } catch {
-      setSuggestions([])
-      setOpen(false)
+      const sugg = data.suggestions || []
+      cacheRef.current.set(key, sugg)
+      apply(sugg)
+    } catch (e) {
+      if (e.name === 'AbortError') return
+      setSuggestions([]); setOpen(false)
     }
-  }, [])
+  }, [apply])
 
   function handleChange(e) {
     const v = e.target.value
@@ -40,11 +54,12 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
     if (skipNextFetch.current) { skipNextFetch.current = false; return }
     clearTimeout(timerRef.current)
     if (v.trim().length < 3) { setSuggestions([]); setOpen(false); return }
-    timerRef.current = setTimeout(() => fetchSuggestions(v), 300)
+    timerRef.current = setTimeout(() => fetchSuggestions(v), 150)
   }
 
   function selectSuggestion(s) {
     skipNextFetch.current = true
+    if (abortRef.current) abortRef.current.abort()
     setOpen(false)
     setSuggestions([])
     onChange(s.text)
