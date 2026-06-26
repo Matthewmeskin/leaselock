@@ -78,6 +78,14 @@ export default function Report() {
     setCustomRooms(c => c.filter(r => r.name !== name))
     setSelected(s => s.filter(x => x !== name))
   }
+  function addAnother(base) {
+    const tmpl = ROOMS.find(r => r.name === base) || { emoji: '📍', prompts: ['Walls and ceiling', 'Flooring', 'Windows and doors', 'Fixtures and outlets'] }
+    const count = allRooms.filter(r => r.name === base || r.name.startsWith(base + ' ')).length
+    const name = count === 0 ? base : `${base} ${count + 1}`
+    if (allRooms.some(r => r.name === name)) return
+    setCustomRooms(c => [...c, { name, emoji: tmpl.emoji, prompts: tmpl.prompts, custom: true }])
+    setSelected(s => [...s, name])
+  }
   const room = activeRooms[roomIdx]
   const current = roomData[room?.name] || { photos: [], issues: [], allGood: false, note: '' }
   const condGood = current.allGood === true || current.cond === 'good'
@@ -189,8 +197,16 @@ export default function Report() {
               )
             })}
           </div>
+          <div style={{ marginTop: 16 }}>
+            <span style={{ fontSize: 13, color: 'var(--ink-soft)', display: 'block', marginBottom: 8 }}>More of a room? Add another:</span>
+            <div className="wz-chips">
+              {['Bedroom', 'Bathroom', 'Living room', 'Other / storage'].map(b => (
+                <button key={b} className="wz-chip" onClick={() => addAnother(b)}>+ {b}</button>
+              ))}
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <input className="wz-input" style={{ flex: 1 }} placeholder="Add a custom room (e.g. Garage, Office)" value={newRoom} onChange={e => setNewRoom(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomRoom() } }} />
+            <input className="wz-input" style={{ flex: 1 }} placeholder="Or name a custom room (e.g. Garage, Office)" value={newRoom} onChange={e => setNewRoom(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomRoom() } }} />
             <button onClick={addCustomRoom} disabled={!newRoom.trim()} style={{ padding: '0 20px', borderRadius: 13, border: 'none', background: 'var(--brand)', color: '#fff', fontWeight: 600, fontSize: 15, fontFamily: 'var(--font-body)', cursor: newRoom.trim() ? 'pointer' : 'default', opacity: newRoom.trim() ? 1 : 0.45 }}>Add</button>
           </div>
         </div>
