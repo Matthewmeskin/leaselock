@@ -669,3 +669,19 @@ a { color: inherit; text-decoration: none; }
   line-height: 1;
 }
 
+
+/* ============ address autocomplete ============ */
+.addr-wrap { position: relative; }
+.addr-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 40;
+  list-style: none; margin: 0; padding: 6px;
+  background: var(--paper); border: 1px solid var(--line-strong); border-radius: 13px;
+  box-shadow: var(--shadow-lg); max-height: 280px; overflow-y: auto;
+}
+.addr-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 11px 12px; border-radius: 9px; cursor: pointer;
+  font-size: 14.5px; color: var(--ink); line-height: 1.35;
+}
+.addr-item:hover, .addr-item.active { background: var(--line); }
+.addr-pin { font-size: 13px; flex-shrink: 0; }
