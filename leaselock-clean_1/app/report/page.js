@@ -321,6 +321,33 @@ export default function Report() {
             <div className="body">{reportText}</div>
           </div>
 
+          {totalPhotos() > 0 && (
+            <div className="report-photos">
+              <h3>Photo record</h3>
+              <p className="rp-sub">Every photo captured during this inspection, locked at {lockTs}.</p>
+              {ROOMS.map(r => {
+                const d = roomData[r.name]
+                if (!d || d.photos.length === 0) return null
+                return (
+                  <div className="rp-room" key={r.name}>
+                    <div className="rp-head">
+                      <span>{r.emoji}</span><b>{r.name}</b>
+                      <span className="ct">{d.photos.length} photo{d.photos.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="rp-grid">
+                      {d.photos.map((p, j) => (
+                        <figure key={j}>
+                          <img src={p} alt={`${r.name} photo ${j + 1}`} />
+                          <figcaption>{r.name} · Photo {j + 1}</figcaption>
+                        </figure>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }} className="no-print">
             <button className="bp" onClick={() => window.print()}>Print / save as PDF</button>
             <Link href="/app" className="bg2" style={{ padding: '12px 20px', borderRadius: 999, fontSize: 14.5, fontWeight: 600, color: 'var(--brand)', border: '1.5px solid var(--line-strong)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Go to my dashboard</Link>
