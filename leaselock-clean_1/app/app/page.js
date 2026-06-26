@@ -628,6 +628,14 @@ export default function App() {
   const [quizDone, setQuizDone] = useState(false)
 
   useEffect(() => {
+    const forceSetup = typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('setup') === 'true'
+    if (forceSetup) {
+      save('rr_profile', null)
+      setProfile(null)
+      setQuizDone(false)
+      return
+    }
     const saved = load('rr_profile', null)
     if (saved) {
       setProfile(saved)
