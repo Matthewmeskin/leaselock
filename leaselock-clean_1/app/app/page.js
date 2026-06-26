@@ -116,6 +116,62 @@ function Quiz({ onComplete }) {
 }
 
 /* ---------- Dashboard ---------- */
+function MiniCalendar({ events, onAdd }) {
+  const [view, setView] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1) })
+  const [sel, setSel] = useState(null)
+  const y = view.getFullYear(), m = view.getMonth()
+  const pad = n => String(n).padStart(2, '0')
+  const now = new Date()
+  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  const firstDow = new Date(y, m, 1).getDay()
+  const daysInMonth = new Date(y, m + 1, 0).getDate()
+  const fmt = d => `${y}-${pad(m + 1)}-${pad(d)}`
+  const byDate = {}
+  ;(events || []).forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e) })
+  const cells = []
+  for (let i = 0; i < firstDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  const selEvents = sel ? (byDate[sel] || []) : []
+  return (
+    <div className="c">
+      <div className="cal-head">
+        <h2 style={{ margin: 0 }}>Calendar</h2>
+        <div className="cal-nav">
+          <button onClick={() => { setView(new Date(y, m - 1, 1)); setSel(null) }} aria-label="Previous month">‹</button>
+          <span className="cal-month">{view.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+          <button onClick={() => { setView(new Date(y, m + 1, 1)); setSel(null) }} aria-label="Next month">›</button>
+        </div>
+      </div>
+      <div className="cal-grid cal-dow">
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} className="cal-dowc">{d}</div>)}
+      </div>
+      <div className="cal-grid">
+        {cells.map((d, i) => {
+          if (d === null) return <div key={i} className="cal-cell empty" />
+          const k = fmt(d)
+          const evs = byDate[k] || []
+          return (
+            <button key={i} className={`cal-cell ${k === todayKey ? 'today' : ''} ${k === sel ? 'sel' : ''} ${evs.length ? 'has' : ''}`} onClick={() => setSel(evs.length ? k : null)}>
+              <span>{d}</span>
+              {evs.length > 0 && <span className="cal-dot" />}
+            </button>
+          )
+        })}
+      </div>
+      {sel && selEvents.length > 0 && (
+        <div className="cal-day-events">
+          <div className="cal-day-label">{new Date(sel + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
+          {selEvents.map(e => {
+            const def = EVT.find(x => x[0] === e.type) || EVT[4]
+            return <div className="cal-ev" key={e.id}><span>{def[2]}</span><b>{e.title}</b></div>
+          })}
+        </div>
+      )}
+      <button className="bg2" style={{ marginTop: 14 }} onClick={onAdd}>Add a date</button>
+    </div>
+  )
+}
+
 function Dashboard({ go, profile }) {
   const [cal, setCal] = useState([])
   const [maint, setMaint] = useState([])
@@ -155,6 +211,8 @@ function Dashboard({ go, profile }) {
         <div className="tile"><div className="t-lab">Rent payments logged</div><div className="t-num">{rent.length}</div></div>
         <div className="tile"><div className="t-lab">Deposit protected</div><div className="t-num brand">{(cal.length || maint.length || rent.length) ? 'Yes' : '—'}</div></div>
       </div>
+
+      <MiniCalendar events={cal} onAdd={() => go('calendar')} />
 
       <div className="c">
         <h2>Next deadlines</h2>
