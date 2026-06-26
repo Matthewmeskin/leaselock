@@ -54,7 +54,10 @@ export default function Report() {
   const [lockTs, setLockTs] = useState('')
   const fileRef = useRef()
 
-  const room = ROOMS[roomIdx]
+  const [selected, setSelected] = useState(ROOMS.map(r => r.name))
+  const activeRooms = ROOMS.filter(r => selected.includes(r.name))
+  function toggleSelect(name) { setSelected(s => s.includes(name) ? s.filter(x => x !== name) : [...s, name]) }
+  const room = activeRooms[roomIdx]
   const current = roomData[room?.name] || { photos: [], issues: [], allGood: false, note: '' }
 
   function updateRoom(patch) {
@@ -80,7 +83,7 @@ export default function Report() {
   function markAllGood() { updateRoom({ allGood: true, issues: [] }) }
 
   function nextRoom() {
-    if (roomIdx < ROOMS.length - 1) { setRoomIdx(i => i + 1) }
+    if (roomIdx < activeRooms.length - 1) { setRoomIdx(i => i + 1) }
     else { setStep('review') }
   }
   function prevRoom() {
@@ -92,7 +95,7 @@ export default function Report() {
 
   async function generate() {
     setStep('generating')
-    const log = ROOMS.map(r => {
+    const log = activeRooms.map(r => {
       const d = roomData[r.name]
       if (!d) return null
       const status = d.allGood ? 'Good — no issues noted' : (d.issues.length ? `Issues: ${d.issues.join(', ')}` : 'Reviewed')
@@ -114,7 +117,7 @@ export default function Report() {
     }
   }
 
-  const pct = roomIdx / ROOMS.length * 100
+  const pct = roomIdx / activeRooms.length * 100
 
   if (step === 'rooms') return (
     <div className="wz">
@@ -139,14 +142,22 @@ export default function Report() {
           <input className="wz-input" placeholder="First and last name" value={tenantName} onChange={e => setTenantName(e.target.value)} />
         </div>
         <div style={{ marginTop: 28 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 600, marginBottom: 14 }}>Rooms to inspect</h3>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
+            <h3 style={{ fontSize: 17, fontWeight: 600 }}>Rooms to inspect</h3>
+            <button onClick={() => setSelected(selected.length === ROOMS.length ? [] : ROOMS.map(r => r.name))} style={{ background: 'none', border: 'none', color: 'var(--brand)', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+              {selected.length === ROOMS.length ? 'Clear all' : 'Select all'}
+            </button>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>Tap to choose which rooms to document. {selected.length} selected.</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px,1fr))', gap: 10 }}>
-            {ROOMS.map((r, i) => {
+            {ROOMS.map((r) => {
+              const on = selected.includes(r.name)
               const done = roomData[r.name]
               return (
-                <div key={r.name} onClick={() => { setRoomIdx(i); setStep('room-detail') }} style={{ background: done ? 'var(--mint-soft)' : 'var(--paper)', border: `1.5px solid ${done ? 'var(--brand)' : 'var(--line-strong)'}`, borderRadius: 14, padding: '16px 14px', cursor: 'pointer', textAlign: 'center' }}>
+                <div key={r.name} onClick={() => toggleSelect(r.name)} style={{ position: 'relative', background: on ? 'var(--mint-soft)' : 'var(--paper)', border: `1.5px solid ${on ? 'var(--brand)' : 'var(--line-strong)'}`, borderRadius: 14, padding: '16px 14px', cursor: 'pointer', textAlign: 'center', opacity: on ? 1 : 0.5, transition: 'opacity .12s, border-color .12s' }}>
+                  <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 5, background: on ? 'var(--brand)' : 'transparent', border: `1.5px solid ${on ? 'var(--brand)' : 'var(--line-strong)'}`, display: 'grid', placeItems: 'center', color: '#fff', fontSize: 11, lineHeight: 1 }}>{on ? '✓' : ''}</div>
                   <div style={{ fontSize: 24 }}>{r.emoji}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginTop: 5, color: done ? 'var(--brand)' : 'var(--ink)' }}>{r.name}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginTop: 5, color: on ? 'var(--brand)' : 'var(--ink)' }}>{r.name}</div>
                   {done && <div style={{ fontSize: 11, color: 'var(--brand)', marginTop: 3 }}>✓ {done.photos.length} photo{done.photos.length !== 1 ? 's' : ''}</div>}
                 </div>
               )
@@ -156,7 +167,7 @@ export default function Report() {
       </div>
       <div className="wz-nav">
         <div className="wz-nav-row">
-          <button className="wz-next" onClick={() => { setRoomIdx(0); setStep('room-detail') }} disabled={!unitAddress && !tenantName}>
+          <button className="wz-next" onClick={() => { setRoomIdx(0); setStep('room-detail') }} disabled={(!unitAddress && !tenantName) || selected.length === 0}>
             Start inspection →
           </button>
         </div>
@@ -171,13 +182,13 @@ export default function Report() {
           <Link href="/" className="brand" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--brand)', display: 'grid', placeItems: 'center', color: 'var(--mint)', fontSize: 14 }}>🏠</span> RenterReady
           </Link>
-          <span className="pct">{roomIdx + 1} of {ROOMS.length}</span>
+          <span className="pct">{roomIdx + 1} of {activeRooms.length}</span>
         </div>
         <div className="wz-prog"><div className="fill" style={{ width: `${pct}%` }} /></div>
       </div>
       <div className="wz-body">
         <div className="wz-room-emoji">{room.emoji}</div>
-        <div className="wz-step-label">ROOM {roomIdx + 1} OF {ROOMS.length}</div>
+        <div className="wz-step-label">ROOM {roomIdx + 1} OF {activeRooms.length}</div>
         <h1 className="wz-h">{room.name}</h1>
         <p className="wz-p">Photograph the spots that matter most, then note any existing issues.</p>
 
@@ -225,7 +236,7 @@ export default function Report() {
         <div className="wz-nav-row">
           <button className="wz-back" onClick={prevRoom}>Back</button>
           <button className="wz-next" onClick={nextRoom}>
-            {roomIdx < ROOMS.length - 1 ? `Next: ${ROOMS[roomIdx + 1].name} →` : 'Review report →'}
+            {roomIdx < activeRooms.length - 1 ? `Next: ${activeRooms[roomIdx + 1].name} →` : 'Review report →'}
           </button>
         </div>
       </div>
@@ -251,7 +262,7 @@ export default function Report() {
         {unitAddress && <div style={{ fontSize: 14, color: 'var(--ink-soft)', marginBottom: 6 }}>📍 {unitAddress}</div>}
         {tenantName && <div style={{ fontSize: 14, color: 'var(--ink-soft)', marginBottom: 20 }}>👤 {tenantName}</div>}
 
-        {ROOMS.map(r => {
+        {activeRooms.map(r => {
           const d = roomData[r.name]
           if (!d) return null
           return (
@@ -276,7 +287,7 @@ export default function Report() {
 
       <div className="wz-nav">
         <div className="wz-nav-row">
-          <button className="wz-back" onClick={() => { setRoomIdx(ROOMS.length - 1); setStep('room-detail') }}>Back</button>
+          <button className="wz-back" onClick={() => { setRoomIdx(activeRooms.length - 1); setStep('room-detail') }}>Back</button>
           <button className="wz-next" onClick={generate}>Generate & lock report →</button>
         </div>
       </div>
@@ -326,7 +337,7 @@ export default function Report() {
             <div className="report-photos">
               <h3>Photo record</h3>
               <p className="rp-sub">Every photo captured during this inspection, locked at {lockTs}.</p>
-              {ROOMS.map(r => {
+              {activeRooms.map(r => {
                 const d = roomData[r.name]
                 if (!d || d.photos.length === 0) return null
                 return (
