@@ -61,8 +61,23 @@ export default function Report() {
   const fileRef = useRef()
 
   const [selected, setSelected] = useState(ROOMS.map(r => r.name))
-  const activeRooms = ROOMS.filter(r => selected.includes(r.name))
+  const [customRooms, setCustomRooms] = useState([])
+  const [newRoom, setNewRoom] = useState('')
+  const allRooms = [...ROOMS, ...customRooms]
+  const activeRooms = allRooms.filter(r => selected.includes(r.name))
   function toggleSelect(name) { setSelected(s => s.includes(name) ? s.filter(x => x !== name) : [...s, name]) }
+  function addCustomRoom() {
+    const name = newRoom.trim()
+    if (!name) return
+    if (allRooms.some(r => r.name.toLowerCase() === name.toLowerCase())) { setNewRoom(''); return }
+    setCustomRooms(c => [...c, { name, emoji: '📍', prompts: ['Walls and ceiling', 'Flooring', 'Windows and doors', 'Fixtures and outlets'], custom: true }])
+    setSelected(s => [...s, name])
+    setNewRoom('')
+  }
+  function removeCustomRoom(name) {
+    setCustomRooms(c => c.filter(r => r.name !== name))
+    setSelected(s => s.filter(x => x !== name))
+  }
   const room = activeRooms[roomIdx]
   const current = roomData[room?.name] || { photos: [], issues: [], allGood: false, note: '' }
   const condGood = current.allGood === true || current.cond === 'good'
@@ -154,24 +169,29 @@ export default function Report() {
         <div style={{ marginTop: 28 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
             <h3 style={{ fontSize: 17, fontWeight: 600 }}>Rooms to inspect</h3>
-            <button onClick={() => setSelected(selected.length === ROOMS.length ? [] : ROOMS.map(r => r.name))} style={{ background: 'none', border: 'none', color: 'var(--brand)', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
-              {selected.length === ROOMS.length ? 'Clear all' : 'Select all'}
+            <button onClick={() => setSelected(selected.length === allRooms.length ? [] : allRooms.map(r => r.name))} style={{ background: 'none', border: 'none', color: 'var(--brand)', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
+              {selected.length === allRooms.length ? 'Clear all' : 'Select all'}
             </button>
           </div>
           <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>Tap to choose which rooms to document. {selected.length} selected.</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px,1fr))', gap: 10 }}>
-            {ROOMS.map((r) => {
+            {allRooms.map((r) => {
               const on = selected.includes(r.name)
               const done = roomData[r.name]
               return (
                 <div key={r.name} onClick={() => toggleSelect(r.name)} style={{ position: 'relative', background: on ? 'var(--mint-soft)' : 'var(--paper)', border: `1.5px solid ${on ? 'var(--brand)' : 'var(--line-strong)'}`, borderRadius: 14, padding: '16px 14px', cursor: 'pointer', textAlign: 'center', opacity: on ? 1 : 0.5, transition: 'opacity .12s, border-color .12s' }}>
                   <div style={{ position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 5, background: on ? 'var(--brand)' : 'transparent', border: `1.5px solid ${on ? 'var(--brand)' : 'var(--line-strong)'}`, display: 'grid', placeItems: 'center', color: '#fff', fontSize: 11, lineHeight: 1 }}>{on ? '✓' : ''}</div>
+                  {r.custom && <button onClick={(e) => { e.stopPropagation(); removeCustomRoom(r.name) }} style={{ position: 'absolute', top: 4, left: 7, background: 'none', border: 'none', color: 'var(--ink-soft)', fontSize: 17, lineHeight: 1, cursor: 'pointer', padding: 0 }}>×</button>}
                   <div style={{ fontSize: 24 }}>{r.emoji}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, marginTop: 5, color: on ? 'var(--brand)' : 'var(--ink)' }}>{r.name}</div>
                   {done && <div style={{ fontSize: 11, color: 'var(--brand)', marginTop: 3 }}>✓ {done.photos.length} photo{done.photos.length !== 1 ? 's' : ''}</div>}
                 </div>
               )
             })}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+            <input className="wz-input" style={{ flex: 1 }} placeholder="Add a custom room (e.g. Garage, Office)" value={newRoom} onChange={e => setNewRoom(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomRoom() } }} />
+            <button onClick={addCustomRoom} disabled={!newRoom.trim()} style={{ padding: '0 20px', borderRadius: 13, border: 'none', background: 'var(--brand)', color: '#fff', fontWeight: 600, fontSize: 15, fontFamily: 'var(--font-body)', cursor: newRoom.trim() ? 'pointer' : 'default', opacity: newRoom.trim() ? 1 : 0.45 }}>Add</button>
           </div>
         </div>
       </div>
