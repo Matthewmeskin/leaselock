@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { QUIZ_STEPS } from '../lib/quiz'
 
 /* ---------- helpers ---------- */
 async function callAPI(system, user, images) {
@@ -43,64 +44,6 @@ function downscale(file, max = 1100) {
    4. Early departure / sublet
    5. Furnished unit
    ============================================================ */
-
-const QUIZ_STEPS = [
-  {
-    id: 'pets',
-    step: '1 OF 5',
-    icon: '🐾',
-    question: 'Do you have pets?',
-    subtext: 'This tailors your lease review and what we flag as risky for you.',
-    options: [
-      { value: 'none', label: 'No pets' },
-      { value: 'yes', label: 'Yes, I have a pet' },
-    ],
-  },
-  {
-    id: 'roommates',
-    step: '2 OF 5',
-    icon: '👥',
-    question: 'Are you living with roommates?',
-    subtext: 'This tailors your lease review and what we flag as risky for you.',
-    options: [
-      { value: 'solo', label: 'Just me' },
-      { value: 'shared', label: 'Yes, on a shared lease' },
-    ],
-  },
-  {
-    id: 'cosigner',
-    step: '3 OF 5',
-    icon: '✅',
-    question: 'Do you have a co-signer or guarantor?',
-    subtext: 'This tailors your lease review and what we flag as risky for you.',
-    options: [
-      { value: 'none', label: 'No co-signer' },
-      { value: 'yes', label: 'Yes, a parent/guarantor' },
-    ],
-  },
-  {
-    id: 'departure',
-    step: '4 OF 5',
-    icon: '🚪',
-    question: "Any chance you'll need to leave early or sublet?",
-    subtext: 'This tailors your lease review and what we flag as risky for you.',
-    options: [
-      { value: 'full', label: 'Staying the full term' },
-      { value: 'maybe', label: 'Possibly — study abroad / internship' },
-    ],
-  },
-  {
-    id: 'furnished',
-    step: '5 OF 5',
-    icon: '🛋️',
-    question: 'Is the unit furnished?',
-    subtext: 'This tailors your move-in inspection checklist and what items we prompt you to document.',
-    options: [
-      { value: 'no', label: 'Unfurnished' },
-      { value: 'yes', label: 'Yes, fully or partially furnished' },
-    ],
-  },
-]
 
 function Quiz({ onComplete }) {
   const [step, setStep] = useState(0)
