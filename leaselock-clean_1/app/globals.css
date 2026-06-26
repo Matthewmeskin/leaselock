@@ -698,3 +698,29 @@ a { color: inherit; text-decoration: none; }
 .tp-q { font-size: 14.5px; color: var(--ink-soft); }
 .tp-a { font-size: 14.5px; font-weight: 600; color: var(--ink); text-align: right; }
 @media print { .report-profile { border: 1px solid #ddd; } }
+
+/* ============ condition segmented toggle ============ */
+.cond-toggle {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+  background: var(--line); padding: 5px; border-radius: 14px;
+}
+.cond-seg {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 14px 12px; border: none; border-radius: 10px; cursor: pointer;
+  background: transparent; color: var(--ink-soft);
+  font-family: var(--font-body); font-size: 15px; font-weight: 600;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+.cond-seg .cond-ico {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  border: 1.5px solid currentColor; color: var(--ink-soft);
+}
+.cond-seg:active { transform: scale(0.99); }
+.cond-seg.on { background: var(--paper); box-shadow: var(--shadow); }
+.cond-seg.good.on { color: var(--brand); }
+.cond-seg.good.on .cond-ico { background: var(--brand); border-color: var(--brand); color: #fff; }
+.cond-seg.issues.on { color: #9a6400; }
+.cond-seg.issues.on .cond-ico { background: var(--amber); border-color: var(--amber); color: var(--brand-deep); }
+.cond-issues { margin-top: 16px; }
+.cond-issues-label { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 10px; }
