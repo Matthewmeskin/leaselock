@@ -65,6 +65,8 @@ export default function Report() {
   function toggleSelect(name) { setSelected(s => s.includes(name) ? s.filter(x => x !== name) : [...s, name]) }
   const room = activeRooms[roomIdx]
   const current = roomData[room?.name] || { photos: [], issues: [], allGood: false, note: '' }
+  const condGood = current.allGood === true || current.cond === 'good'
+  const condIssues = current.cond === 'issues' || (!current.allGood && (current.issues?.length > 0))
 
   function updateRoom(patch) {
     setRoomData(d => ({ ...d, [room.name]: { ...current, ...patch } }))
@@ -83,7 +85,7 @@ export default function Report() {
 
   function toggleIssue(type) {
     const issues = current.issues.includes(type) ? current.issues.filter(x => x !== type) : [...current.issues, type]
-    updateRoom({ issues, allGood: false })
+    updateRoom({ issues, allGood: false, cond: 'issues' })
   }
 
   function markAllGood() { updateRoom({ allGood: true, issues: [] }) }
@@ -222,14 +224,22 @@ export default function Report() {
 
         <div className="wz-field">
           <label>Condition</label>
-          <button className="wz-allgood" onClick={markAllGood} style={{ background: current.allGood ? 'var(--mint-soft)' : undefined, borderColor: current.allGood ? 'var(--brand)' : undefined }}>
-            {current.allGood ? '✓ All good — no issues' : '✓ Everything looks good in here'}
-          </button>
-          {!current.allGood && (
-            <div className="wz-chips">
-              {ISSUE_TYPES.map(t => (
-                <button key={t} className={`wz-chip ${current.issues.includes(t) ? 'on' : ''}`} onClick={() => toggleIssue(t)}>{t}</button>
-              ))}
+          <div className="cond-toggle">
+            <button type="button" className={`cond-seg good ${condGood ? 'on' : ''}`} onClick={() => updateRoom({ cond: 'good', allGood: true, issues: [] })}>
+              <span className="cond-ico">✓</span> Looks good
+            </button>
+            <button type="button" className={`cond-seg issues ${condIssues ? 'on' : ''}`} onClick={() => updateRoom({ cond: 'issues', allGood: false })}>
+              <span className="cond-ico">!</span> Has issues
+            </button>
+          </div>
+          {condIssues && (
+            <div className="cond-issues">
+              <div className="cond-issues-label">What's the issue? Tap all that apply.</div>
+              <div className="wz-chips">
+                {ISSUE_TYPES.map(t => (
+                  <button key={t} className={`wz-chip ${current.issues.includes(t) ? 'on' : ''}`} onClick={() => toggleIssue(t)}>{t}</button>
+                ))}
+              </div>
             </div>
           )}
         </div>
