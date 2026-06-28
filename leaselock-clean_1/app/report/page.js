@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import AddressAutocomplete from '../components/AddressAutocomplete'
+import Logo from '../components/Logo'
 import { profileToReadable } from '../lib/quiz'
 
 async function callAPI(system, user, images) {
@@ -64,7 +65,7 @@ function GeneratingLoader() {
   return (
     <div className="gen-wrap">
       <div className="gen-scene">
-        <span className="gen-house">🏠</span>
+        <Logo size={96} className="gen-house" />
         <span className="gen-glass">🔍</span>
       </div>
       <h2 className="gen-title">Writing your report</h2>
@@ -207,7 +208,7 @@ export default function Report() {
       <div className="wz-top">
         <div className="wz-top-row">
           <Link href="/" className="brand" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--brand)', display: 'grid', placeItems: 'center', color: 'var(--mint)', fontSize: 14 }}>🏠</span> RenterReady
+            <Logo size={28} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span>
           </Link>
           <span className="pct">Move-in inspection</span>
         </div>
@@ -276,7 +277,7 @@ export default function Report() {
       <div className="wz-top">
         <div className="wz-top-row">
           <Link href="/" className="brand" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--brand)', display: 'grid', placeItems: 'center', color: 'var(--mint)', fontSize: 14 }}>🏠</span> RenterReady
+            <Logo size={28} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span>
           </Link>
           <span className="pct">{roomIdx + 1} of {activeRooms.length}</span>
         </div>
@@ -355,7 +356,7 @@ export default function Report() {
       <div className="wz-top">
         <div className="wz-top-row">
           <Link href="/" className="brand" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--brand)', display: 'grid', placeItems: 'center', color: 'var(--mint)', fontSize: 14 }}>🏠</span> RenterReady
+            <Logo size={28} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span>
           </Link>
           <span className="pct">Review</span>
         </div>
@@ -417,7 +418,7 @@ export default function Report() {
       <div className="wz-top">
         <div className="wz-top-row">
           <Link href="/" className="brand" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--brand)', display: 'grid', placeItems: 'center', color: 'var(--mint)', fontSize: 14 }}>🏠</span> RenterReady
+            <Logo size={28} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span>
           </Link>
         </div>
       </div>

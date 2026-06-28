@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import SiteNav from './_components/SiteNav'
+import Logo from './components/Logo'
 
 export default function Landing() {
   return (
@@ -217,7 +218,7 @@ export default function Landing() {
         <div className="wrap">
           <div className="footer-inner">
             <div>
-              <div className="brand"><span className="brand-mark">🏠</span> RenterReady</div>
+              <div className="brand"><Logo size={34} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span></div>
               <p>Lease review. Move-in proof. Deposit protection. All in one place.</p>
             </div>
             <div className="footer-cols">

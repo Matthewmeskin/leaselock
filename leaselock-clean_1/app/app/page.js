@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import Logo from '../components/Logo'
 import { QUIZ_STEPS } from '../lib/quiz'
 
 /* ---------- helpers ---------- */
@@ -701,7 +702,7 @@ export default function App() {
     <div className="ax">
       <style>{`@keyframes ll-spin{to{transform:rotate(360deg)}}`}</style>
       <aside className="ax-side">
-        <Link href="/" className="ax-brand"><span className="ax-mark">🏠</span> RenterReady</Link>
+        <Link href="/" className="ax-brand"><Logo size={30} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span></Link>
         <nav className="ax-nav">
           {NAV.map(([k, l, i]) => <button key={k} className={`ax-link ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}><span className="ico">{i}</span>{l}</button>)}
         </nav>
