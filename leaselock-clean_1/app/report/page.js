@@ -43,7 +43,7 @@ const ROOMS = [
   { name: 'Other / storage', emoji: '📦', prompts: ['Walls and flooring', 'Shelving', 'Doors and locks'] },
 ]
 
-const ISSUE_TYPES = ['Damage', 'Stain', 'Crack', 'Missing item', 'Not working', 'Wear and tear', 'Other']
+const ISSUE_TYPES = ['Damage', 'Stain', 'Crack', 'Missing item', 'Not working', 'Loose or broken', 'Wear and tear', 'Water damage', 'Mold or mildew', 'Pest evidence', 'Dirty / not cleaned', 'Other']
 
 const LOADER_MSGS = [
   'Peeking behind the fridge',
