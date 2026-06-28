@@ -89,6 +89,7 @@ export default function Report() {
   }, [])
   const profileRows = profileToReadable(profile)
   const fileRef = useRef()
+  const noteRef = useRef()
 
   const [selected, setSelected] = useState(ROOMS.map(r => r.name))
   const [customRooms, setCustomRooms] = useState([])
@@ -136,9 +137,24 @@ export default function Report() {
     updateRoom({ photos: current.photos.filter((_, j) => j !== i) })
   }
 
+  function removePhotoFromRoom(roomName, i) {
+    setRoomData(d => {
+      const rd = d[roomName]
+      if (!rd) return d
+      return { ...d, [roomName]: { ...rd, photos: rd.photos.filter((_, j) => j !== i) } }
+    })
+  }
+
   function toggleIssue(type) {
-    const issues = current.issues.includes(type) ? current.issues.filter(x => x !== type) : [...current.issues, type]
+    const turningOn = !current.issues.includes(type)
+    const issues = turningOn ? [...current.issues, type] : current.issues.filter(x => x !== type)
     updateRoom({ issues, allGood: false, cond: 'issues' })
+    if (type === 'Other' && turningOn) {
+      setTimeout(() => {
+        noteRef.current?.focus()
+        noteRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 60)
+    }
   }
 
   function markAllGood() { updateRoom({ allGood: true, issues: [] }) }
@@ -146,6 +162,10 @@ export default function Report() {
   function nextRoom() {
     if (roomIdx < activeRooms.length - 1) { setRoomIdx(i => i + 1) }
     else { setStep('review') }
+  }
+  function skipRoom() {
+    if (roomIdx < activeRooms.length - 1) setRoomIdx(i => i + 1)
+    else setStep('review')
   }
   function prevRoom() {
     if (roomIdx > 0) setRoomIdx(i => i - 1)
@@ -311,8 +331,8 @@ export default function Report() {
         </div>
 
         <div className="wz-field">
-          <label>Notes (optional)</label>
-          <textarea className="wz-note" placeholder="Describe anything specific — scuff on north wall, stain near window, cracked tile..." value={current.note} onChange={e => updateRoom({ note: e.target.value })} />
+          <label>{current.issues?.includes('Other') ? 'Describe the issue' : 'Notes (optional)'}</label>
+          <textarea ref={noteRef} className="wz-note" placeholder="Describe anything specific, like a scuff on the north wall, a stain near the window, or a cracked tile." value={current.note} onChange={e => updateRoom({ note: e.target.value })} />
         </div>
       </div>
 
@@ -323,6 +343,9 @@ export default function Report() {
             {roomIdx < activeRooms.length - 1 ? `Next: ${activeRooms[roomIdx + 1].name} →` : 'Review report →'}
           </button>
         </div>
+        <button className="wz-skip" onClick={skipRoom}>
+          Skip this room {roomIdx < activeRooms.length - 1 ? '→' : ''}
+        </button>
       </div>
     </div>
   )
@@ -361,7 +384,12 @@ export default function Report() {
               {d.note && <div className="ri" style={{ marginTop: 4 }}>{d.note}</div>}
               {d.photos.length > 0 && (
                 <div className="wz-mini-thumbs">
-                  {d.photos.map((p, i) => <img key={i} src={p} alt="" />)}
+                  {d.photos.map((p, i) => (
+                    <div key={i} className="wz-mini-thumb">
+                      <img src={p} alt="" />
+                      <button className="rm-mini" onClick={() => removePhotoFromRoom(r.name, i)}>×</button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
