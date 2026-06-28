@@ -208,7 +208,7 @@ export default function Report() {
       <div className="wz-top">
         <div className="wz-top-row">
           <Link href="/" className="brand" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Logo size={28} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span>
+            <Logo size={28} /><span>Renter<span style={{ color: 'var(--brand)' }}>Ready</span></span>
           </Link>
           <span className="pct">Move-in inspection</span>
         </div>
@@ -277,7 +277,7 @@ export default function Report() {
       <div className="wz-top">
         <div className="wz-top-row">
           <Link href="/" className="brand" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Logo size={28} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span>
+            <Logo size={28} /><span>Renter<span style={{ color: 'var(--brand)' }}>Ready</span></span>
           </Link>
           <span className="pct">{roomIdx + 1} of {activeRooms.length}</span>
         </div>
@@ -356,7 +356,7 @@ export default function Report() {
       <div className="wz-top">
         <div className="wz-top-row">
           <Link href="/" className="brand" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Logo size={28} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span>
+            <Logo size={28} /><span>Renter<span style={{ color: 'var(--brand)' }}>Ready</span></span>
           </Link>
           <span className="pct">Review</span>
         </div>
@@ -418,7 +418,7 @@ export default function Report() {
       <div className="wz-top">
         <div className="wz-top-row">
           <Link href="/" className="brand" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Logo size={28} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span>
+            <Logo size={28} /><span>Renter<span style={{ color: 'var(--brand)' }}>Ready</span></span>
           </Link>
         </div>
       </div>

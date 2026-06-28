@@ -4,7 +4,7 @@ export default function SiteNav() {
   return (
     <nav className="nav">
       <div className="wrap nav-inner">
-        <Link href="/" className="brand"><Logo size={34} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span></Link>
+        <Link href="/" className="brand"><Logo size={34} /><span>Renter<span style={{ color: 'var(--brand)' }}>Ready</span></span></Link>
         <div className="nav-links">
           <Link href="/#how" className="hide-sm">How it works</Link>
           <Link href="/guides" className="hide-sm">Guides</Link>

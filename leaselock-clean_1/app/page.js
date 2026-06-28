@@ -218,7 +218,7 @@ export default function Landing() {
         <div className="wrap">
           <div className="footer-inner">
             <div>
-              <div className="brand"><Logo size={34} /> Renter<span style={{ color: 'var(--brand)' }}>Ready</span></div>
+              <div className="brand"><Logo size={34} /><span>Renter<span style={{ color: 'var(--brand)' }}>Ready</span></span></div>
               <p>Lease review. Move-in proof. Deposit protection. All in one place.</p>
             </div>
             <div className="footer-cols">
