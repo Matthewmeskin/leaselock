@@ -11,8 +11,13 @@ Follow these one-time steps.
 ## 2. Create the database tables
 1. In the project, open **SQL Editor → New query**.
 2. Paste the entire contents of [`supabase/schema.sql`](./supabase/schema.sql) and click **Run**.
-   - This creates the tables, row-level-security policies (each user only sees
-     their own rows), and a trigger that auto-creates a profile row on signup.
+   - This creates the tables, row-level-security policies, and a trigger that
+     auto-creates a profile row on signup.
+3. Then run the shared-lease migration: open a new query, paste the contents of
+   [`supabase/02_shared_lease.sql`](./supabase/02_shared_lease.sql), and click **Run**.
+   - This adds households + members, the invite-code join flow, and moves the
+     shared toolkit data (calendar, maintenance, rent, roommate agreement, lease
+     review) to be shared per-household and scoped by membership.
 
 ## 3. Set up Google login
 You need a Google OAuth client, then connect it to Supabase.

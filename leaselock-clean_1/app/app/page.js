@@ -261,6 +261,12 @@ function LeaseReview({ profile }) {
   const [reviewedAt, setReviewedAt] = useState('')
   const fileRef = useRef()
 
+  useEffect(() => {
+    db.getLeaseReview().then(r => {
+      if (r) { setData(r); setReviewedAt(r.reviewedAt ? new Date(r.reviewedAt).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '') }
+    }).catch(() => {})
+  }, [])
+
   function onPdf(e) {
     const f = e.target.files?.[0]
     if (!f) return
@@ -292,7 +298,12 @@ function LeaseReview({ profile }) {
         `You are a renter protection assistant. ${ctxStr} Analyze the lease and respond with ONLY valid JSON, no markdown fences, in this exact shape: {"summary":"2 to 3 sentence plain English summary","score":<integer 0-100 how renter-friendly this lease is, higher is safer>,"verdict":"short phrase like Sign with caution","flags":[{"title":"short","detail":"one sentence","severity":"high|medium|low"}],"questions":["question to ask landlord"]}. Include 3 to 6 flags and 3 to 5 questions.`,
         userMsg, null, pdfData)
       const clean = out.replace(/```json|```/g, '').trim()
-      try { setData(JSON.parse(clean)); setReviewedAt(new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })) } catch { setRaw(out) }
+      try {
+        const parsed = JSON.parse(clean)
+        setData(parsed)
+        setReviewedAt(new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))
+        db.saveLeaseReview(parsed).catch(() => {})
+      } catch { setRaw(out) }
     } catch { setRaw('Something went wrong. Please try again.') }
     setLoading(false)
   }
@@ -681,64 +692,68 @@ const RM_CLAUSES = [
 
 const RM_BLANK = { address: '', startDate: '', roommates: [], terms: {}, generated: '', generatedAt: '', signatures: {} }
 
-function RoommateAgreement() {
+function RoommateAgreement({ go }) {
   const [data, setData] = useState(RM_BLANK)
-  const [name, setName] = useState('')
+  const [household, setHousehold] = useState(null)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { db.getRoommate().then(setData).catch(() => {}) }, [])
+  useEffect(() => {
+    db.getRoommate().then(setData).catch(() => {})
+    db.getHousehold().then(setHousehold).catch(() => {})
+  }, [])
   function persist(n) { setData(n); db.saveRoommate(n).catch(() => {}) }
   function patch(p) { persist({ ...data, ...p }) }
-  function addRoommate() {
-    const nm = name.trim(); if (!nm) return
-    if (data.roommates.some(r => r.name.toLowerCase() === nm.toLowerCase())) { setName(''); return }
-    patch({ roommates: [...data.roommates, { id: uid(), name: nm }] }); setName('')
-  }
-  function removeRoommate(id) {
-    const sigs = { ...data.signatures }; delete sigs[id]
-    persist({ ...data, roommates: data.roommates.filter(r => r.id !== id), signatures: sigs })
-  }
   function setTerm(k, v) { persist({ ...data, terms: { ...data.terms, [k]: v } }) }
   const filled = RM_CLAUSES.filter(([k]) => (data.terms[k] || '').trim())
+  const members = household?.members || []
 
   async function generate() {
-    if (data.roommates.length < 2) { alert('Add at least two roommates.'); return }
     if (filled.length === 0) { alert('Fill in at least one section.'); return }
     setBusy(true)
     try {
       const lines = filled.map(([k, label]) => `${label}: ${data.terms[k].trim()}`).join('\n')
-      const who = data.roommates.map(r => r.name).join(', ')
+      const who = members.length ? members.map(m => m.name).join(', ') : 'the roommates'
       const text = await callAPI(
         'You are a roommate agreement assistant. Turn the provided points into a clear, fair, plain-English roommate living agreement. Organize it into numbered sections with short headings. Keep it balanced and neutral toward every roommate. Only use the terms provided, do not invent specifics that were not given. Open with the roommate names, the address, and the start date. End with a short line stating that each roommate should sign and date below to show they agree. Under 450 words. Plain text only, no markdown symbols, no asterisks.',
         `Roommates: ${who}\nAddress: ${data.address || 'not provided'}\nStart date: ${data.startDate || 'not provided'}\n\nAgreed points:\n${lines}`
       )
+      // Re-generating invalidates prior signatures.
       persist({ ...data, generated: text, generatedAt: new Date().toISOString(), signatures: {} })
     } catch (e) { alert('Could not generate the agreement. Please try again.') }
     setBusy(false)
   }
-  function sign(id) { persist({ ...data, signatures: { ...data.signatures, [id]: new Date().toISOString() } }) }
-  function unsign(id) { const s = { ...data.signatures }; delete s[id]; persist({ ...data, signatures: s }) }
+  function signSelf() {
+    const me = members.find(m => m.isYou)
+    if (!me) return
+    persist({ ...data, signatures: { ...data.signatures, [me.userId]: new Date().toISOString() } })
+  }
+  function unsignSelf() {
+    const me = members.find(m => m.isYou)
+    if (!me) return
+    const s = { ...data.signatures }; delete s[me.userId]
+    persist({ ...data, signatures: s })
+  }
 
   return (
     <>
       <div className="c no-print">
         <h2>Roommate agreement</h2>
-        <p className="d">Put your living arrangement in writing so everyone is on the same page from day one. Add your roommates, fill in what you have agreed on, and the AI turns it into a clean agreement you can all sign. A written record is what prevents the he-said-she-said later.</p>
+        <p className="d">Put your living arrangement in writing so everyone is on the same page from day one. Fill in what you have agreed on, and the AI turns it into a clean agreement. Everyone on the lease shares this agreement, and each roommate signs from their own account.</p>
 
-        <span className="lab">Roommates</span>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          <input className="inp" style={{ flex: 1 }} placeholder="Add a roommate name" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addRoommate() } }} />
-          <button className="bg2" onClick={addRoommate} disabled={!name.trim()}>Add</button>
-        </div>
-        {data.roommates.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-            {data.roommates.map(r => (
-              <span key={r.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'var(--mint-soft)', color: 'var(--brand)', fontWeight: 600, fontSize: 14, padding: '7px 12px', borderRadius: 999 }}>
-                {r.name}
-                <button onClick={() => removeRoommate(r.id)} style={{ background: 'none', border: 'none', color: 'var(--brand)', cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
+        <span className="lab">Roommates on this lease</span>
+        {members.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+            {members.map(m => (
+              <span key={m.userId} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'var(--mint-soft)', color: 'var(--brand)', fontWeight: 600, fontSize: 14, padding: '7px 12px', borderRadius: 999 }}>
+                {m.name}{m.isYou ? ' (you)' : ''}
               </span>
             ))}
           </div>
+        ) : (
+          <p className="d" style={{ marginBottom: 10 }}>Loading roommates…</p>
         )}
+        <p className="d" style={{ marginTop: 0, marginBottom: 16, fontSize: 13 }}>
+          Roommates come from your shared lease. {go && <button className="lnk" onClick={() => go('household')} style={{ background: 'none', border: 'none', color: 'var(--brand)', cursor: 'pointer', fontWeight: 600, padding: 0, textDecoration: 'underline', fontSize: 13 }}>Invite roommates →</button>}
+        </p>
 
         <div className="form-row">
           <div><span className="lab">Address (optional)</span><input className="inp" placeholder="123 Main St, Apt 4B" value={data.address} onChange={e => patch({ address: e.target.value })} /></div>
@@ -767,23 +782,137 @@ function RoommateAgreement() {
 
           <div style={{ marginTop: 18 }}>
             <span className="lab">Signatures</span>
-            <p className="d no-print" style={{ marginTop: 2, marginBottom: 6 }}>Each roommate taps to sign. Printing also leaves a line for a handwritten signature.</p>
-            {data.roommates.map(r => {
-              const signed = data.signatures[r.id]
+            <p className="d no-print" style={{ marginTop: 2, marginBottom: 6 }}>Each roommate signs from their own account. Printing also leaves a line for a handwritten signature.</p>
+            {members.map(m => {
+              const signed = data.signatures[m.userId]
               return (
-                <div key={r.id} className="rm-sign">
-                  <div className="rm-sign-name">{r.name}</div>
+                <div key={m.userId} className="rm-sign">
+                  <div className="rm-sign-name">{m.name}{m.isYou ? ' (you)' : ''}</div>
                   {signed
-                    ? <div className="rm-sign-done">✓ Signed {new Date(signed).toLocaleDateString()} <button className="no-print" onClick={() => unsign(r.id)} style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>undo</button></div>
-                    : <button className="bg2 no-print" style={{ padding: '6px 14px', fontSize: 13 }} onClick={() => sign(r.id)}>Sign as {r.name}</button>}
+                    ? <div className="rm-sign-done">✓ Signed {new Date(signed).toLocaleDateString()} {m.isYou && <button className="no-print" onClick={unsignSelf} style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--ink-soft)', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>undo</button>}</div>
+                    : m.isYou
+                      ? <button className="bg2 no-print" style={{ padding: '6px 14px', fontSize: 13 }} onClick={signSelf}>Sign as {m.name}</button>
+                      : <div className="rm-sign-done" style={{ color: 'var(--ink-soft)' }}>Awaiting signature</div>}
                   <div className="rm-sign-line" />
                 </div>
               )
             })}
           </div>
-          <p className="d no-print" style={{ marginTop: 14, fontSize: 12.5 }}>This is a private record stored on this device. It is not legal advice. For binding terms, check your lease and local law.</p>
+          <p className="d no-print" style={{ marginTop: 14, fontSize: 12.5 }}>This is a shared record for everyone on the lease. It is not legal advice. For binding terms, check your lease and local law.</p>
         </div>
       )}
+    </>
+  )
+}
+
+/* ---------- Lease & roommates (shared household) ---------- */
+function initials(name) {
+  return (name || '?').split(' ').filter(Boolean).slice(0, 2).map(s => s[0].toUpperCase()).join('')
+}
+
+function Household() {
+  const [hh, setHh] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [origin, setOrigin] = useState('')
+  const [nameInput, setNameInput] = useState('')
+  const [joinCode, setJoinCode] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [busy, setBusy] = useState('')
+
+  async function reload() {
+    try { const h = await db.getHousehold(); setHh(h); setNameInput(h?.name || '') } catch {}
+    setLoading(false)
+  }
+  useEffect(() => {
+    if (typeof window !== 'undefined') setOrigin(window.location.origin)
+    reload()
+  }, [])
+
+  const inviteLink = hh && origin ? `${origin}/join?code=${hh.inviteCode}` : ''
+
+  async function copyLink() {
+    try { await navigator.clipboard.writeText(inviteLink); setCopied(true); setTimeout(() => setCopied(false), 1800) } catch {}
+  }
+  async function saveName() {
+    if (!nameInput.trim() || nameInput.trim() === hh?.name) return
+    setBusy('name')
+    try { await db.renameHousehold(nameInput.trim()); await reload() } catch { alert('Could not rename.') }
+    setBusy('')
+  }
+  async function regenerate() {
+    if (!confirm('Generate a new invite link? The old link will stop working.')) return
+    setBusy('regen')
+    try { await db.regenerateInvite(); await reload() } catch { alert('Could not regenerate the link.') }
+    setBusy('')
+  }
+  async function join() {
+    const code = joinCode.trim()
+    if (!code) return
+    setBusy('join')
+    try {
+      await db.joinHousehold(code)
+      window.location.reload()
+    } catch (e) { alert('Could not join: ' + (e?.message || 'invalid code')); setBusy('') }
+  }
+  async function leave() {
+    if (!confirm('Leave this shared lease? You will start fresh with your own lease and stop seeing this household\'s data.')) return
+    setBusy('leave')
+    try { await db.leaveHousehold(); window.location.reload() } catch { alert('Could not leave.'); setBusy('') }
+  }
+
+  if (loading) return <div className="c"><p className="d">Loading your lease…</p></div>
+
+  return (
+    <>
+      <div className="c">
+        <h2>Your lease {hh?.isShared && <span className="up" style={{ background: 'var(--mint-soft)', color: 'var(--brand)' }}>Shared</span>}</h2>
+        <p className="d">Everyone you invite here shares the same calendar, maintenance log, rent records, lease review, and roommate agreement. One lease, one source of truth.</p>
+
+        <span className="lab">Lease name</span>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+          <input className="inp" style={{ flex: 1 }} value={nameInput} onChange={e => setNameInput(e.target.value)} placeholder="e.g. 123 Main St, Apt 4B" />
+          <button className="bg2" onClick={saveName} disabled={busy === 'name' || !nameInput.trim() || nameInput.trim() === hh?.name}>{busy === 'name' ? 'Saving…' : 'Save'}</button>
+        </div>
+
+        <span className="lab">Roommates ({hh?.members?.length || 0})</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6, marginBottom: 4 }}>
+          {(hh?.members || []).map(m => (
+            <div key={m.userId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 12 }}>
+              <span style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--mint-soft)', color: 'var(--brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, overflow: 'hidden', flexShrink: 0 }}>
+                {m.avatar ? <img src={m.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials(m.name)}
+              </span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14.5 }}>{m.name}{m.isYou ? ' (you)' : ''}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>{m.role === 'owner' ? 'Lease owner' : 'Roommate'}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="c">
+        <h2>Invite roommates</h2>
+        <p className="d">Share this link with your roommates. They sign in with Google and instantly join this lease.</p>
+        <span className="lab">Invite link</span>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <input className="inp" style={{ flex: 1 }} readOnly value={inviteLink} onFocus={e => e.target.select()} />
+          <button className="bp" style={{ padding: '0 18px' }} onClick={copyLink}>{copied ? '✓ Copied' : 'Copy'}</button>
+        </div>
+        <button className="bg2" onClick={regenerate} disabled={busy === 'regen'} style={{ fontSize: 13 }}>{busy === 'regen' ? 'Working…' : '↺ Generate a new link'}</button>
+      </div>
+
+      <div className="c">
+        <h2>Join a roommate's lease</h2>
+        <p className="d">Got an invite link or code from a roommate? Paste the code here to join their lease instead. You can be on one shared lease at a time.</p>
+        <span className="lab">Invite code</span>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <input className="inp" style={{ flex: 1 }} value={joinCode} onChange={e => setJoinCode(e.target.value)} placeholder="Paste invite code" />
+          <button className="bp" onClick={join} disabled={busy === 'join' || !joinCode.trim()}>{busy === 'join' ? 'Joining…' : 'Join'}</button>
+        </div>
+        {hh?.isShared && (
+          <button className="bg2" onClick={leave} disabled={busy === 'leave'} style={{ marginTop: 10, fontSize: 13, color: '#c0392b', borderColor: '#e6c3bf' }}>{busy === 'leave' ? 'Leaving…' : 'Leave this lease'}</button>
+        )}
+      </div>
     </>
   )
 }
@@ -792,6 +921,7 @@ function RoommateAgreement() {
 // Messages tab removed
 const NAV = [
   ['home', 'Dashboard', '◫'],
+  ['household', 'Lease & roommates', '🏠'],
   ['lease', 'Lease review', '📄'],
   ['movein', 'Move-in report', '📸'],
   ['roommates', 'Roommate agreement', '🤝'],
@@ -801,6 +931,7 @@ const NAV = [
 ]
 const TITLES = {
   home: 'Dashboard',
+  household: 'Lease & roommates',
   lease: 'Lease review',
   movein: 'Move-in report',
   roommates: 'Roommate agreement',
@@ -892,9 +1023,10 @@ export default function App() {
         <div className="ax-top"><h1>{TITLES[tab]}</h1><Link href="/" style={{ fontSize: 14, color: 'var(--ink-soft)', fontWeight: 500 }}>Home</Link></div>
         <div className="ax-body">
           {tab === 'home' && <Dashboard go={setTab} profile={profile} />}
+          {tab === 'household' && <Household />}
           {tab === 'lease' && <LeaseReview profile={profile} />}
           {tab === 'movein' && <MoveInLauncher />}
-          {tab === 'roommates' && <RoommateAgreement />}
+          {tab === 'roommates' && <RoommateAgreement go={setTab} />}
           {tab === 'calendar' && <Calendar />}
           {tab === 'maint' && <Maintenance />}
           {tab === 'rent' && <RentLog />}

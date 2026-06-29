@@ -13,12 +13,90 @@ export async function getCurrentUser() {
   return data?.user ?? null
 }
 
+/* ---------------- Household (shared lease) ---------------- */
+let _householdId = null
+
+export function clearHouseholdCache() { _householdId = null }
+
+// The caller's active lease/household id. Cached for the session.
+export async function activeHouseholdId() {
+  if (_householdId) return _householdId
+  const supabase = createClient()
+  const { data, error } = await supabase.from('profiles').select('household_id').maybeSingle()
+  if (error) throw error
+  _householdId = data?.household_id ?? null
+  return _householdId
+}
+
+// Full household details + members (with names) for the Lease & roommates page.
+export async function getHousehold() {
+  const supabase = createClient()
+  const hid = await activeHouseholdId()
+  if (!hid) return null
+  const user = await getCurrentUser()
+  const [{ data: hh, error: e1 }, { data: members, error: e2 }] = await Promise.all([
+    supabase.from('households').select('id, name, invite_code, created_by, created_at').eq('id', hid).maybeSingle(),
+    supabase
+      .from('household_members')
+      .select('user_id, role, joined_at, profiles!household_members_profile_fk(full_name, avatar_url)')
+      .eq('household_id', hid)
+      .order('joined_at', { ascending: true }),
+  ])
+  if (e1) throw e1
+  if (e2) throw e2
+  if (!hh) return null
+  const list = (members || []).map((m) => ({
+    userId: m.user_id,
+    role: m.role,
+    name: m.profiles?.full_name || 'Roommate',
+    avatar: m.profiles?.avatar_url || null,
+    isYou: user && m.user_id === user.id,
+  }))
+  return {
+    id: hh.id,
+    name: hh.name,
+    inviteCode: hh.invite_code,
+    createdBy: hh.created_by,
+    isOwner: user && hh.created_by === user.id,
+    members: list,
+    isShared: list.length > 1,
+  }
+}
+
+export async function joinHousehold(code) {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('join_household', { p_code: (code || '').trim() })
+  if (error) throw error
+  clearHouseholdCache()
+  return Array.isArray(data) ? data[0] : data
+}
+
+export async function leaveHousehold() {
+  const supabase = createClient()
+  const { error } = await supabase.rpc('leave_household')
+  if (error) throw error
+  clearHouseholdCache()
+}
+
+export async function renameHousehold(name) {
+  const supabase = createClient()
+  const { error } = await supabase.rpc('rename_household', { p_name: name })
+  if (error) throw error
+}
+
+export async function regenerateInvite() {
+  const supabase = createClient()
+  const { data, error } = await supabase.rpc('regenerate_invite_code')
+  if (error) throw error
+  return data
+}
+
 /* ---------------- Profile / quiz answers ---------------- */
 export async function getProfile() {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('profiles')
-    .select('full_name, avatar_url, pets, roommates, cosigner, departure, furnished')
+    .select('full_name, avatar_url, pets, roommates, cosigner, departure, furnished, household_id')
     .maybeSingle()
   if (error) throw error
   return data
@@ -54,9 +132,10 @@ export async function addCalendar({ type, title, date }) {
   const supabase = createClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('Not signed in')
+  const household_id = await activeHouseholdId()
   const { data, error } = await supabase
     .from('calendar_events')
-    .insert({ user_id: user.id, type, title, date })
+    .insert({ user_id: user.id, household_id, type, title, date })
     .select('id, type, title, date')
     .single()
   if (error) throw error
@@ -88,9 +167,10 @@ export async function addMaintenance({ title, room, note }) {
   const supabase = createClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('Not signed in')
+  const household_id = await activeHouseholdId()
   const { data, error } = await supabase
     .from('maintenance_issues')
-    .insert({ user_id: user.id, title, room, note, status: 'open', msg: '' })
+    .insert({ user_id: user.id, household_id, title, room, note, status: 'open', msg: '' })
     .select('id, title, room, note, status, msg, created_at')
     .single()
   if (error) throw error
@@ -134,9 +214,10 @@ export async function addRent({ month, amount, method }) {
   const supabase = createClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('Not signed in')
+  const household_id = await activeHouseholdId()
   const { data, error } = await supabase
     .from('rent_payments')
-    .insert({ user_id: user.id, month, amount, method })
+    .insert({ user_id: user.id, household_id, month, amount, method })
     .select('id, month, amount, method, paid_at')
     .single()
   if (error) throw error
@@ -179,7 +260,9 @@ export async function saveRoommate(d) {
   const supabase = createClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('Not signed in')
+  const household_id = await activeHouseholdId()
   const row = {
+    household_id,
     user_id: user.id,
     address: d.address || null,
     start_date: d.startDate || null,
@@ -190,11 +273,40 @@ export async function saveRoommate(d) {
     signatures: d.signatures || {},
     updated_at: new Date().toISOString(),
   }
-  const { error } = await supabase.from('roommate_agreements').upsert(row)
+  const { error } = await supabase
+    .from('roommate_agreements')
+    .upsert(row, { onConflict: 'household_id' })
+  if (error) throw error
+}
+
+/* ---------------- Lease review (shared, latest per household) ---------------- */
+export async function getLeaseReview() {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('lease_reviews')
+    .select('data, reviewed_at')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return { ...data.data, reviewedAt: data.reviewed_at }
+}
+
+export async function saveLeaseReview(reviewData) {
+  const supabase = createClient()
+  const user = await getCurrentUser()
+  if (!user) throw new Error('Not signed in')
+  const household_id = await activeHouseholdId()
+  const { error } = await supabase
+    .from('lease_reviews')
+    .upsert(
+      { household_id, data: reviewData, reviewed_at: new Date().toISOString(), created_by: user.id },
+      { onConflict: 'household_id' }
+    )
   if (error) throw error
 }
 
 export async function signOut() {
   const supabase = createClient()
+  clearHouseholdCache()
   await supabase.auth.signOut()
 }
