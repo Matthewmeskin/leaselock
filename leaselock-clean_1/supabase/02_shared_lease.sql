@@ -210,7 +210,7 @@ begin
   insert into public.household_members (household_id, user_id, role)
     values (hid, auth.uid(), 'member')
     on conflict (household_id, user_id) do nothing;
-  update public.profiles set household_id = hid where id = auth.uid();
+  update public.profiles p set household_id = hid where p.id = auth.uid();
   return query select hid, hname;
 end;
 $$;
