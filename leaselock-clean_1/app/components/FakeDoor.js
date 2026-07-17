@@ -1,10 +1,16 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { track } from '../lib/analytics'
 
+const KEY = 'rr_plus_interest'
+
 // "Fake door" pricing test: measures willingness to pay before Plus exists.
+// Interest persists across refreshes so the button doesn't reappear.
 export default function FakeDoor({ placement }) {
   const [clicked, setClicked] = useState(false)
+  useEffect(() => {
+    try { setClicked(localStorage.getItem(KEY) === '1') } catch {}
+  }, [])
   return (
     <div className="no-print" style={{ background: 'linear-gradient(135deg, var(--brand) 0%, var(--brand-deep) 100%)', borderRadius: 16, padding: '20px 22px', color: '#fff', marginTop: 18 }}>
       {clicked ? (
@@ -20,7 +26,11 @@ export default function FakeDoor({ placement }) {
             </div>
           </div>
           <button
-            onClick={() => { track('fake_door_click', { placement }); setClicked(true) }}
+            onClick={() => {
+              track('fake_door_click', { placement })
+              try { localStorage.setItem(KEY, '1') } catch {}
+              setClicked(true)
+            }}
             style={{ background: 'var(--mint)', color: 'var(--brand-deep)', border: 'none', borderRadius: 999, padding: '11px 22px', fontWeight: 700, fontSize: 14.5, cursor: 'pointer', whiteSpace: 'nowrap' }}
           >
             Upgrade to Plus →

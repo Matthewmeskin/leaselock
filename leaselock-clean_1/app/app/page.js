@@ -1,7 +1,7 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Logo from '../components/Logo'
 import GeneratingLoader from '../components/GeneratingLoader'
 import AddressAutocomplete from '../components/AddressAutocomplete'
@@ -1094,9 +1094,19 @@ const TITLES = {
   documents: 'Documents',
 }
 
-export default function App() {
+const TAB_KEYS = new Set(NAV.map(([k]) => k))
+
+function AppShell() {
   const router = useRouter()
-  const [tab, setTab] = useState('home')
+  const search = useSearchParams()
+  // The active tab lives in the URL (?tab=…) so back/forward, refresh, and
+  // shared links all work. setTab pushes a history entry.
+  const urlTab = TAB_KEYS.has(search.get('tab')) ? search.get('tab') : 'home'
+  const [tab, setTabState] = useState(urlTab)
+  useEffect(() => { setTabState(urlTab) }, [urlTab])
+  function setTab(k) {
+    router.push(k === 'home' ? '/app' : `/app?tab=${encodeURIComponent(k)}`, { scroll: false })
+  }
   const [profile, setProfile] = useState(null)
   const [quizDone, setQuizDone] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -1202,5 +1212,13 @@ export default function App() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <Suspense fallback={null}>
+      <AppShell />
+    </Suspense>
   )
 }
