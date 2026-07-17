@@ -70,6 +70,7 @@ export default function Report() {
   const [roomData, setRoomData] = useState({})
   const [tenantName, setTenantName] = useState('')
   const [unitAddress, setUnitAddress] = useState('')
+  const [unitNum, setUnitNum] = useState('')
   const [reportText, setReportText] = useState('')
   const [editingReport, setEditingReport] = useState(false)
   const [lockTs, setLockTs] = useState('')
@@ -307,6 +308,11 @@ export default function Report() {
     track('movein_generate')
     setStep('generating')
     setLiveText('')
+    // Fold the unit number into the saved address ("… , Apt 4B").
+    const unitPart = unitNum.trim()
+    const fullAddress = unitAddress && unitPart
+      ? `${unitAddress.replace(/[\s,]+$/, '')}, ${/^(apt|unit|ste|suite|#|no\.?\s)/i.test(unitPart) ? unitPart : `Apt ${unitPart}`}`
+      : unitAddress
     const log = activeRooms.map(r => {
       const d = roomData[r.name]
       if (!d) return null
@@ -320,7 +326,7 @@ export default function Report() {
         body: JSON.stringify({
           stream: true,
           system: 'You are a renter protection assistant. Review the move-in photos and produce a professional, factual move-in condition report organized by room. Be specific about any damage, stains, or issues visible in the photos. Under 350 words. Plain text, no markdown.',
-          user: `Unit: ${unitAddress || 'Not provided'}\nTenant: ${tenantName || 'Not provided'}`
+          user: `Unit: ${fullAddress || 'Not provided'}\nTenant: ${tenantName || 'Not provided'}`
             + (profileRows.length ? `\n\nTenant intake:\n${profileRows.map(r => `- ${r.question} ${r.answer}`).join('\n')}` : '')
             + `\n\nRoom-by-room log:\n${log}\n\nReview photos and write the report:`,
           images: allPhotos,
@@ -368,7 +374,7 @@ export default function Report() {
             photo_times: d.photoTimes || [],
           })
         }
-        const row = await saveMoveInReport({ unitAddress, tenantName, reportText: text, rooms: roomsSummary, property })
+        const row = await saveMoveInReport({ unitAddress: fullAddress, tenantName, reportText: text, rooms: roomsSummary, property })
         setSaved(row)
       } catch (err) {
         console.error('Could not save report', err)
@@ -431,7 +437,7 @@ export default function Report() {
                 ].filter(Boolean).join(' · ')
               )}
               {!(property.units > 1) && (property.bedrooms > 1 || property.bathrooms > 1) && <> — we pre-selected the rooms below to match.</>}
-              {property.units > 1 && <> — add your unit to the address above (e.g. &ldquo;, Apt 3&rdquo;).</>}
+              {property.units > 1 && <> — add your unit number below.</>}
               {property.units > 1 && (
                 <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>
                   ℹ️ County records cover the whole building — individual units aren&apos;t in public records, so
@@ -441,6 +447,13 @@ export default function Report() {
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>Source: {property.source} · saved with your report</div>
             </div>
           )}
+        </div>
+        <div className="wz-field">
+          <label>Unit / Apt # (optional)</label>
+          <input
+            className="wz-input" style={{ maxWidth: 220 }} placeholder="e.g. 4B"
+            value={unitNum} onChange={e => setUnitNum(e.target.value)}
+          />
         </div>
         <div className="wz-field">
           <label>Your name</label>
