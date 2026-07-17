@@ -9,17 +9,23 @@ const GEO_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY
 async function fetchPhoton(input, signal) {
   const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(input)}&limit=8&lang=en`, { signal })
   const data = await res.json()
+  // OSM often returns the street without the house number the user typed —
+  // carry their number into the suggestion so it completes the address.
+  const typedNum = (input.trim().match(/^(\d+)\s/) || [])[1]
   const seen = new Set()
   const out = []
   for (const f of data.features || []) {
     const p = f.properties || {}
     if (p.countrycode && p.countrycode !== 'US') continue
-    const line1 = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name
+    let line1 = [p.housenumber, p.street].filter(Boolean).join(' ')
+    if (!line1 && p.street) line1 = p.street
+    if (!line1) line1 = p.name
     if (!line1) continue
+    if (typedNum && !/^\d/.test(line1) && (p.street || p.osm_key === 'highway')) line1 = `${typedNum} ${line1}`
     const text = [line1, p.city || p.county, [p.state, p.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ')
     if (seen.has(text)) continue
     seen.add(text)
-    out.push({ placeId: `ph-${p.osm_id || text}`, text })
+    out.push({ placeId: `ph-${p.osm_id || text}`, text, hasNum: /^\d/.test(text) })
     if (out.length >= 6) break
   }
   return out
@@ -30,11 +36,11 @@ async function fetchGeoapify(input, signal) {
     const url = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(input)}&format=json&filter=countrycode:us&limit=6&apiKey=${GEO_KEY}`
     const res = await fetch(url, { signal })
     const data = await res.json()
-    return (data.results || []).map(r => ({ placeId: r.place_id, text: r.formatted }))
+    return (data.results || []).map(r => ({ placeId: r.place_id, text: (r.formatted || '').replace(/, United States of America$/, '') }))
   }
   const res = await fetch(`/api/places?q=${encodeURIComponent(input)}`, { signal })
   const data = await res.json()
-  return data.suggestions || []
+  return (data.suggestions || []).map(s => ({ ...s, text: (s.text || '').replace(/, United States of America$/, '') }))
 }
 
 // Resolve with the first non-empty result; empty only if every source is empty/failed.
@@ -85,11 +91,15 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
     abortRef.current = controller
     setLoading(true); setOpen(true)
     try {
-      const sugg = await firstNonEmpty([
+      let sugg = await firstNonEmpty([
         fetchPhoton(input, controller.signal),
         fetchGeoapify(input, controller.signal),
       ])
       if (controller.signal.aborted) return
+      // If the user typed a house number, float completed addresses to the top.
+      if (/^\d/.test(input.trim())) {
+        sugg = [...sugg].sort((a, b) => (/^\d/.test(b.text) ? 1 : 0) - (/^\d/.test(a.text) ? 1 : 0))
+      }
       cacheRef.current.set(key, sugg)
       setLoading(false)
       apply(sugg)
