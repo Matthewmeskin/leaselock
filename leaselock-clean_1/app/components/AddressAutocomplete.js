@@ -1,13 +1,16 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 
-// Providers, in order of preference:
-//  - Radar (api.radar.io) — authoritative when NEXT_PUBLIC_RADAR_KEY is set.
-//    Free tier is 100k calls/month with excellent US address data.
-//  - Geoapify — fallback authority while no Radar key is configured.
-//  - Photon (komoot, free) — provisional fill only, replaced when the
-//    authoritative provider responds.
+// Sources race in parallel; the highest-priority non-empty answer wins and
+// replaces anything a faster, lower-priority source painted provisionally:
+//  3 — Radar / Mapbox: authoritative nationwide, only when their key is set
+//      (NEXT_PUBLIC_RADAR_KEY / NEXT_PUBLIC_MAPBOX_TOKEN).
+//  2 — LA County Assessor roll (via /api/property?suggest=): keyless, exact
+//      parcel addresses; picking one guarantees a property-record match.
+//  1 — Geoapify (key or /api/places proxy): nationwide fallback.
+//  0 — Photon (komoot, free): fast provisional fill only.
 const RADAR_KEY = process.env.NEXT_PUBLIC_RADAR_KEY
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
 const GEO_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY
 
 async function fetchRadar(input, signal) {
@@ -21,6 +24,26 @@ async function fetchRadar(input, signal) {
     placeId: `rd-${i}-${a.formattedAddress || ''}`,
     text: (a.formattedAddress || '').replace(/,?\s*(United States of America|United States|USA)$/i, ''),
   })).filter(s => s.text)
+}
+
+async function fetchMapbox(input, signal) {
+  const res = await fetch(
+    `https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(input)}&autocomplete=true&country=us&limit=6&types=address,street&access_token=${MAPBOX_TOKEN}`,
+    { signal }
+  )
+  if (!res.ok) throw new Error(`mapbox ${res.status}`)
+  const data = await res.json()
+  return (data.features || []).map(f => ({
+    placeId: f.id,
+    text: (f.properties?.full_address || f.properties?.place_formatted || f.properties?.name || '')
+      .replace(/,?\s*United States$/i, ''),
+  })).filter(s => s.text)
+}
+
+async function fetchAssessor(input, signal) {
+  const res = await fetch(`/api/property?suggest=${encodeURIComponent(input)}`, { signal })
+  const data = await res.json()
+  return data.suggestions || []
 }
 
 async function fetchPhoton(input, signal) {
@@ -98,34 +121,31 @@ export default function AddressAutocomplete({ value, onChange, onSelect, placeho
     const controller = new AbortController()
     abortRef.current = controller
     setLoading(true); setOpen(true)
-    // The authoritative provider (Radar when its key is set, else Geoapify)
-    // replaces results on arrival; Photon is only a fast provisional fill.
-    const authoritative = RADAR_KEY ? fetchRadar : fetchGeoapify
-    const geoP = authoritative(input, controller.signal).catch(() => [])
-    const photonP = fetchPhoton(input, controller.signal).catch(() => [])
-    let settled = false
+    const sources = [
+      RADAR_KEY ? { fn: fetchRadar, pri: 3 } : MAPBOX_TOKEN ? { fn: fetchMapbox, pri: 3 } : null,
+      { fn: fetchAssessor, pri: 2 },
+      { fn: fetchGeoapify, pri: 1 },
+      { fn: fetchPhoton, pri: 0 },
+    ].filter(Boolean)
 
-    geoP.then(geo => {
-      if (controller.signal.aborted) return
-      if (geo.length) {
-        settled = true
-        cacheRef.current.set(key, geo)
-        setLoading(false)
-        apply(geo)
-      }
-    })
-
-    photonP.then(ph => {
-      if (controller.signal.aborted || settled) return
-      if (ph.length) { setLoading(false); apply(rankByHouseNumber(ph, input)) } // provisional
-    })
-
-    Promise.allSettled([geoP, photonP]).then(async () => {
-      if (controller.signal.aborted || settled) return
-      const ph = rankByHouseNumber(await photonP, input)
-      cacheRef.current.set(key, ph)
+    let bestPri = -1
+    let bestList = []
+    const promises = sources.map(s => ({
+      pri: s.pri,
+      p: s.fn(input, controller.signal).catch(() => []),
+    }))
+    promises.forEach(({ pri, p }) => p.then(list => {
+      if (controller.signal.aborted || !list.length || pri <= bestPri) return
+      bestPri = pri
+      bestList = pri >= 2 ? list : rankByHouseNumber(list, input)
       setLoading(false)
-      if (ph.length) apply(ph)
+      apply(bestList)
+    }))
+
+    Promise.allSettled(promises.map(x => x.p)).then(() => {
+      if (controller.signal.aborted) return
+      setLoading(false)
+      if (bestList.length) { cacheRef.current.set(key, bestList); apply(bestList) }
       else { setSuggestions([]); setOpen(false) }
     })
   }, [apply])
