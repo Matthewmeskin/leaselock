@@ -131,12 +131,47 @@ export default function Report() {
   }
 
   const [dragOver, setDragOver] = useState(false)
+  const [scanning, setScanning] = useState(false)
+
+  // AI pre-assessment: look at the room's photos and pre-select the condition
+  // and issue types. Only applies if the user hasn't chosen anything yet.
+  async function analyzeRoomPhotos(roomName, photos) {
+    if (!photos.length) return
+    setScanning(true)
+    try {
+      const res = await fetch('/api/claude', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system: `You are inspecting move-in photos of a rental unit. Respond with ONLY valid JSON, no markdown fences, in this exact shape: {"condition":"good"|"issues","issues":[...],"note":"one short sentence on what you see"}. "issues" must be a subset of: ${ISSUE_TYPES.join(', ')}. Use "issues" only for clearly visible problems; normal furnishings and clean rooms are "good".`,
+          user: `Room: ${roomName}. Assess the visible condition in these photos.`,
+          images: photos,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'scan failed')
+      const parsed = JSON.parse((data.text || '').replace(/```json|```/g, '').trim())
+      setRoomData(d => {
+        const cur = d[roomName] || { photos, issues: [], allGood: false, note: '' }
+        // Respect anything the user already chose.
+        if (cur.cond || cur.allGood || (cur.issues?.length ?? 0) > 0) return d
+        const foundIssues = Array.isArray(parsed.issues) ? parsed.issues.filter(i => ISSUE_TYPES.includes(i)) : []
+        if (parsed.condition === 'issues' && foundIssues.length) {
+          return { ...d, [roomName]: { ...cur, cond: 'issues', allGood: false, issues: foundIssues, note: cur.note || parsed.note || '', aiSuggested: true } }
+        }
+        return { ...d, [roomName]: { ...cur, cond: 'good', allGood: true, issues: [], aiSuggested: true } }
+      })
+    } catch { /* no suggestion — the user picks manually */ }
+    setScanning(false)
+  }
 
   async function addPhotoFiles(fileList) {
     const files = Array.from(fileList || []).filter(f => f.type.startsWith('image/')).slice(0, 8)
     if (!files.length) return
     const scaled = await Promise.all(files.map(f => downscale(f)))
-    updateRoom({ photos: [...current.photos, ...scaled].slice(0, 8) })
+    const allPhotos = [...current.photos, ...scaled].slice(0, 8)
+    const allTimes = [...(current.photoTimes || []), ...scaled.map(() => new Date().toISOString())].slice(0, 8)
+    updateRoom({ photos: allPhotos, photoTimes: allTimes })
+    analyzeRoomPhotos(room.name, allPhotos)
     // Persist to household documents (shared with roommates).
     scaled.forEach((dataUrl) => {
       dataUrlToBlob(dataUrl)
@@ -157,14 +192,24 @@ export default function Report() {
   }
 
   function removePhoto(i) {
-    updateRoom({ photos: current.photos.filter((_, j) => j !== i) })
+    updateRoom({
+      photos: current.photos.filter((_, j) => j !== i),
+      photoTimes: (current.photoTimes || []).filter((_, j) => j !== i),
+    })
   }
 
   function removePhotoFromRoom(roomName, i) {
     setRoomData(d => {
       const rd = d[roomName]
       if (!rd) return d
-      return { ...d, [roomName]: { ...rd, photos: rd.photos.filter((_, j) => j !== i) } }
+      return {
+        ...d,
+        [roomName]: {
+          ...rd,
+          photos: rd.photos.filter((_, j) => j !== i),
+          photoTimes: (rd.photoTimes || []).filter((_, j) => j !== i),
+        },
+      }
     })
   }
 
@@ -245,6 +290,8 @@ export default function Report() {
             name: r.name, emoji: r.emoji,
             status: d.allGood ? 'Good — no issues' : (d.issues?.length ? d.issues.join(', ') : 'Reviewed'),
             note: d.note || '', photos: d.photos.length,
+            documented_at: d.photoTimes?.[0] || new Date().toISOString(),
+            photo_times: d.photoTimes || [],
           }
         }).filter(Boolean)
         const row = await saveMoveInReport({ unitAddress, tenantName, reportText: text, rooms: roomsSummary })
@@ -367,10 +414,20 @@ export default function Report() {
             <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 2 }}>Focus on: {room.prompts.slice(0, 3).join(' · ')}</div>
           </div>
           <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
+          {scanning && (
+            <div style={{ fontSize: 13, color: 'var(--brand)', fontWeight: 600, margin: '4px 0 8px' }}>
+              ✨ AI is checking your photos…
+            </div>
+          )}
+          {!scanning && current.aiSuggested && (
+            <div style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '4px 0 8px' }}>
+              ✨ Condition pre-filled by AI from your photos — adjust below if it got it wrong.
+            </div>
+          )}
           {current.photos.length > 0 && (
             <div className="wz-thumbs">
               {current.photos.map((p, i) => (
-                <div key={i} className="wz-thumb">
+                <div key={i} className="wz-thumb" title={current.photoTimes?.[i] ? `Added ${new Date(current.photoTimes[i]).toLocaleString()}` : undefined}>
                   <img src={p} alt="" />
                   <button className="rm" onClick={() => removePhoto(i)}>×</button>
                 </div>
@@ -570,7 +627,10 @@ export default function Report() {
                       {d.photos.map((p, j) => (
                         <figure key={j}>
                           <img src={p} alt={`${r.name} photo ${j + 1}`} />
-                          <figcaption>{r.name} · Photo {j + 1}</figcaption>
+                          <figcaption>
+                            {r.name} · Photo {j + 1}
+                            {d.photoTimes?.[j] && <> · 🕐 {new Date(d.photoTimes[j]).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</>}
+                          </figcaption>
                         </figure>
                       ))}
                     </div>
