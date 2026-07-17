@@ -30,6 +30,30 @@ const num = (v) => {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+// "19829 HAMILTON AVE" / "LOS ANGELES CA" → "19829 Hamilton Ave, Los Angeles, CA 90502"
+const tc = (s) => s.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/(\d)(St|Nd|Rd|Th)\b/g, (_, d, suf) => d + suf.toLowerCase())
+function fmtSitus(p) {
+  const street = tc(String(p.SitusStreet || '').replace(/\s+/g, ' ').trim())
+  const city = tc(String(p.SitusCity || '').replace(/\s+(CA|CALIF|CALIFORNIA)$/i, '').replace(/\s+/g, ' ').trim())
+  const zip = String(p.SitusZipCode || '').slice(0, 5)
+  return [street, city ? `${city}, CA` : 'CA'].filter(Boolean).join(', ') + (/^\d{5}$/.test(zip) && zip !== '00000' ? ` ${zip}` : '')
+}
+
+function normalize(ain, d, situs) {
+  return {
+    found: true,
+    apn: ain,
+    situs,
+    yearBuilt: num(pick(d, ['YearBuiltMain', 'YearBuilt', 'EffectiveYearBuilt', 'EffectiveYear'])),
+    sqft: num(pick(d, ['SqftMain', 'SQFTMain', 'SquareFootageMain', 'BuildingSqft'])),
+    bedrooms: num(pick(d, ['BedroomsMain', 'Bedrooms', 'NumOfBeds', 'TotalBedrooms'])),
+    bathrooms: num(pick(d, ['BathroomsMain', 'Bathrooms', 'NumOfBaths', 'TotalBathrooms'])),
+    units: num(pick(d, ['NumOfUnitsMain', 'Units', 'NumOfUnits', 'TotalUnits'])),
+    use: pick(d, ['UseTypeDescription', 'UseDescription', 'UseType', 'SpecificUseType', 'PropertyType']),
+    source: 'LA County Assessor public records',
+  }
+}
+
 const fetchJson = async (url) => {
   const res = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { Accept: 'application/json' } })
   if (!res.ok) throw new Error(`assessor ${res.status}`)
@@ -39,16 +63,45 @@ const fetchJson = async (url) => {
 export async function GET(req) {
   const { searchParams } = new URL(req.url)
 
-  // Raw parcel-detail probe for field discovery: /api/property?ain=7351033050
+  // Address suggestions straight from the assessor roll (keyless, LA County).
+  // Every suggestion is a real parcel, so picking one guarantees a record match.
+  if (searchParams.get('suggest') != null) {
+    const s = (searchParams.get('suggest') || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim()
+    if (s.length < 3) return Response.json({ suggestions: [] })
+    try {
+      const data = await fetchJson(SEARCH + encodeURIComponent(s))
+      const seen = new Set()
+      const out = []
+      for (const p of data?.Parcels || []) {
+        if (!p.SitusStreet || !p.AIN) continue
+        const text = fmtSitus(p)
+        if (seen.has(text)) continue
+        seen.add(text)
+        out.push({ placeId: `la-${p.AIN}`, text })
+        if (out.length >= 6) break
+      }
+      return Response.json({ suggestions: out }, { headers: { 'Cache-Control': 'public, s-maxage=86400' } })
+    } catch {
+      return Response.json({ suggestions: [] })
+    }
+  }
+
+  // Direct parcel lookup by AIN (used when a suggestion above was picked).
+  // ?debug=1 returns the raw payload for field discovery.
   if (searchParams.get('ain')) {
     try {
-      const r = await fetch(DETAIL + encodeURIComponent(searchParams.get('ain')), {
-        signal: AbortSignal.timeout(8000), headers: { Accept: 'application/json' },
-      })
-      const body = await r.text()
-      return new Response(body.slice(0, 20000), { status: r.status, headers: { 'Content-Type': 'application/json' } })
+      const detailRaw = await fetchJson(DETAIL + encodeURIComponent(searchParams.get('ain')))
+      const d = detailRaw?.Parcel || detailRaw?.parcel || detailRaw
+      if (searchParams.get('debug')) {
+        return new Response(JSON.stringify(detailRaw).slice(0, 20000), { headers: { 'Content-Type': 'application/json' } })
+      }
+      if (!d?.AIN) return Response.json({ found: false })
+      return Response.json(
+        normalize(d.AIN, d, [d.SitusStreet, d.SitusCity].filter(Boolean).join(', ')),
+        { headers: { 'Cache-Control': 'public, s-maxage=604800, stale-while-revalidate=86400' } }
+      )
     } catch (e) {
-      return Response.json({ probeError: String(e?.message || e) }, { status: 502 })
+      return Response.json({ found: false, error: String(e?.message || e) })
     }
   }
 
@@ -79,18 +132,10 @@ export async function GET(req) {
       return Response.json({ hit, detailKeys: Object.keys(d || {}), detail: d })
     }
 
-    return Response.json({
-      found: true,
-      apn: hit.AIN,
-      situs: [hit.SitusStreet, hit.SitusCity].filter(Boolean).join(', '),
-      yearBuilt: num(pick(d, ['YearBuiltMain', 'YearBuilt', 'EffectiveYearBuilt', 'EffectiveYearBuiltMain'])),
-      sqft: num(pick(d, ['SqftMain', 'SQFTMain', 'SquareFootageMain', 'BuildingSqft', 'ImprovementMainSqft'])),
-      bedrooms: num(pick(d, ['BedroomsMain', 'Bedrooms', 'NumOfBeds', 'TotalBedrooms'])),
-      bathrooms: num(pick(d, ['BathroomsMain', 'Bathrooms', 'NumOfBaths', 'TotalBathrooms'])),
-      units: num(pick(d, ['NumOfUnitsMain', 'Units', 'NumOfUnits', 'TotalUnits'])),
-      use: pick(d, ['UseTypeDescription', 'UseDescription', 'UseType', 'SpecificUseType', 'PropertyType']),
-      source: 'LA County Assessor public records',
-    }, { headers: { 'Cache-Control': 'public, s-maxage=604800, stale-while-revalidate=86400' } })
+    return Response.json(
+      normalize(hit.AIN, d, [hit.SitusStreet, hit.SitusCity].filter(Boolean).join(', ')),
+      { headers: { 'Cache-Control': 'public, s-maxage=604800, stale-while-revalidate=86400' } }
+    )
   } catch (e) {
     return Response.json({ found: false, error: String(e?.message || e) })
   }

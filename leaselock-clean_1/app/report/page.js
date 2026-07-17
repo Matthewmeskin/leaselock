@@ -127,11 +127,16 @@ export default function Report() {
   // is picked from the dropdown. Best-effort: silently skipped outside LA.
   const [property, setProperty] = useState(null)
   const [propLoading, setPropLoading] = useState(false)
-  async function lookupProperty(address) {
+  async function lookupProperty(sel) {
     setProperty(null)
     setPropLoading(true)
     try {
-      const res = await fetch(`/api/property?q=${encodeURIComponent(address)}`)
+      // Assessor suggestions carry the parcel id (la-<AIN>) — exact lookup,
+      // no re-matching needed. Everything else goes through address search.
+      const qs = typeof sel === 'object' && sel?.placeId?.startsWith('la-')
+        ? `ain=${encodeURIComponent(sel.placeId.slice(3))}`
+        : `q=${encodeURIComponent(typeof sel === 'string' ? sel : sel?.text || '')}`
+      const res = await fetch(`/api/property?${qs}`)
       const p = await res.json()
       if (p?.found) {
         setProperty(p)
@@ -388,7 +393,7 @@ export default function Report() {
         <p className="wz-p">We'll go room by room. Take photos, note any existing issues, and our AI writes the condition report. Takes about 5 minutes.</p>
         <div className="wz-field">
           <label>Unit address</label>
-          <AddressAutocomplete value={unitAddress} onChange={setUnitAddress} onSelect={s => lookupProperty(s.text)} placeholder="123 Main St, Apt 4B" />
+          <AddressAutocomplete value={unitAddress} onChange={setUnitAddress} onSelect={lookupProperty} placeholder="123 Main St, Apt 4B" />
           {propLoading && (
             <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>Checking public property records…</div>
           )}
