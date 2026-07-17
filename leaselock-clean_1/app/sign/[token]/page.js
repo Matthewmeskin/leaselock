@@ -82,7 +82,10 @@ export default function SignReportPage() {
                     <span>{r.emoji || '📍'}</span>
                     <b style={{ minWidth: 120 }}>{r.name}</b>
                     <span style={{ color: r.status?.startsWith('Good') ? 'var(--brand)' : '#c07c0c' }}>{r.status}</span>
-                    <span style={{ marginLeft: 'auto', color: 'var(--ink-soft)', fontSize: 12.5, whiteSpace: 'nowrap' }}>{r.photos || 0} photo{r.photos === 1 ? '' : 's'}</span>
+                    <span style={{ marginLeft: 'auto', color: 'var(--ink-soft)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
+                      {r.photos || 0} photo{r.photos === 1 ? '' : 's'}
+                      {r.documented_at && <> · 🕐 {new Date(r.documented_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</>}
+                    </span>
                   </div>
                 ))}
               </div>

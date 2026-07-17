@@ -55,9 +55,18 @@ function SignupInner() {
 
   useEffect(() => { track('signup_view') }, [])
 
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
+  const pwChecks = [
+    ['8+ characters', password.length >= 8],
+    ['a letter', /[a-zA-Z]/.test(password)],
+    ['a number', /\d/.test(password)],
+  ]
+  const pwOk = pwChecks.every(([, ok]) => ok)
+
   function nextFromName(e) {
     e.preventDefault()
-    if (name.trim().length < 2) { setError('Please enter your name.'); return }
+    if (name.trim().length < 2) { setError('Please enter your name (at least 2 characters).'); return }
+    if (/\d/.test(name)) { setError('Names can’t contain numbers — just your first and last name.'); return }
     setError('')
     track('signup_name')
     setStep(2)
@@ -65,7 +74,8 @@ function SignupInner() {
 
   async function createAccount(e) {
     e.preventDefault()
-    if (password.length < 8) { setError('Password needs at least 8 characters.'); return }
+    if (!emailOk) { setError('That email doesn’t look right — double-check it (e.g. you@school.edu).'); return }
+    if (!pwOk) { setError('Your password needs at least 8 characters, including a letter and a number.'); return }
     setLoading(true)
     setError('')
     const supabase = createClient()
@@ -168,8 +178,19 @@ function SignupInner() {
                   value={password} onChange={(e) => setPassword(e.target.value)}
                   placeholder="At least 8 characters" style={inputStyle}
                 />
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+                  {pwChecks.map(([label, ok]) => (
+                    <span key={label} style={{ fontSize: 12, fontWeight: 600, color: ok ? 'var(--brand)' : 'var(--ink-soft)' }}>
+                      {ok ? '✓' : '○'} {label}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <button type="submit" disabled={loading} style={primaryBtn(loading)}>
+              <button
+                type="submit"
+                disabled={loading || !emailOk || !pwOk}
+                style={{ ...primaryBtn(loading), opacity: loading || !emailOk || !pwOk ? 0.5 : 1, cursor: loading || !emailOk || !pwOk ? 'default' : 'pointer' }}
+              >
                 {loading ? 'Creating your account…' : 'Create account'}
               </button>
             </form>

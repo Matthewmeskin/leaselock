@@ -22,8 +22,12 @@ function LoginInner() {
   const [mode, setMode] = useState('login') // 'login' | 'forgot' | 'sent'
   const redirect = params.get('redirect') || '/app'
 
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
+
   async function signIn(e) {
     e.preventDefault()
+    if (!emailOk) { setError('That email doesn’t look right — double-check it (e.g. you@example.com).'); return }
+    if (!password) { setError('Please enter your password.'); return }
     setLoading(true)
     setError('')
     const supabase = createClient()
@@ -45,6 +49,7 @@ function LoginInner() {
 
   async function sendReset(e) {
     e.preventDefault()
+    if (!emailOk) { setError('That email doesn’t look right — double-check it before we send the reset link.'); return }
     setLoading(true)
     setError('')
     const supabase = createClient()
