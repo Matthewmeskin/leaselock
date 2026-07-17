@@ -78,6 +78,8 @@ export default function Report() {
   useEffect(() => {
     track('movein_view')
     getProfile().then(p => { if (p) setProfile(p) }).catch(() => {})
+    // ?new=1 skips the restore so "Start a new inspection" begins fresh.
+    if (new URLSearchParams(window.location.search).get('new') === '1') return
     // Restore the most recent locked report so it survives refreshes.
     latestMoveInReport().then(r => {
       if (!r) return

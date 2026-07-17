@@ -179,7 +179,10 @@ function Dashboard({ go, profile }) {
       <div className="c">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <h2 style={{ margin: 0 }}>Key dates</h2>
-          <button className="bg2" onClick={() => go('calendar')}>Add a date</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => go('calendar')} style={{ background: 'none', border: 'none', color: 'var(--brand)', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}>View all →</button>
+            <button className="bg2" onClick={() => go('calendar')}>Add a date</button>
+          </div>
         </div>
         <p className="d" style={{ marginTop: 6 }}>The dates that protect your deposit — notice deadlines, rent, lease end.</p>
         {upcoming.length === 0 ? (
@@ -235,6 +238,10 @@ function LeaseReview({ profile }) {
   }, [])
 
   const [pdfDragOver, setPdfDragOver] = useState(false)
+  const [leaseDocs, setLeaseDocs] = useState([])
+  useEffect(() => {
+    db.listDocuments().then(d => setLeaseDocs(d.filter(x => x.kind === 'lease').slice(0, 5))).catch(() => {})
+  }, [])
 
   function loadPdf(f) {
     if (!f) return
@@ -333,6 +340,25 @@ function LeaseReview({ profile }) {
       {loading && (
         <div className="c">
           <GeneratingLoader title="Reviewing your lease" msgs={LEASE_LOADER_MSGS} />
+        </div>
+      )}
+
+      {leaseDocs.length > 0 && (
+        <div className="c">
+          <h2>Your uploaded leases</h2>
+          <p className="d">Lease PDFs saved to your household documents.</p>
+          {leaseDocs.map(doc => (
+            <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 4px', borderBottom: '1px solid var(--line)', fontSize: 14 }}>
+              <span style={{ fontSize: 20 }}>📄</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+                  Uploaded {new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+              </div>
+              <button className="bg2" onClick={() => db.documentUrl(doc.storage_path).then(u => window.open(u, '_blank', 'noopener')).catch(() => alert('Could not open this file.'))}>View</button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -683,13 +709,36 @@ function RentLog() {
 
 /* ---------- Move-in launcher ---------- */
 function MoveInLauncher() {
+  const [reports, setReports] = useState([])
+  useEffect(() => { db.listMoveInReports().then(setReports).catch(() => {}) }, [])
   return (
-    <div className="c" style={{ textAlign: 'center', padding: '40px 26px' }}>
-      <div style={{ fontSize: 44, marginBottom: 8 }}>📸</div>
-      <h2 style={{ justifyContent: 'center' }}>Guided move-in inspection</h2>
-      <p className="d" style={{ maxWidth: 420, margin: '0 auto 22px' }}>Walk through your unit room by room. Mostly tapping, a few photos, and our AI writes the condition report. You and your landlord both get the same locked record.</p>
-      <a href="/report" className="bp" style={{ textDecoration: 'none' }}>Start guided inspection →</a>
-    </div>
+    <>
+      <div className="c" style={{ textAlign: 'center', padding: '40px 26px' }}>
+        <div style={{ fontSize: 44, marginBottom: 8 }}>📸</div>
+        <h2 style={{ justifyContent: 'center' }}>Guided move-in inspection</h2>
+        <p className="d" style={{ maxWidth: 420, margin: '0 auto 22px' }}>Walk through your unit room by room. Mostly tapping, a few photos, and our AI writes the condition report. You and your landlord both get the same locked record.</p>
+        <a href="/report?new=1" className="bp" style={{ textDecoration: 'none' }}>Start a new inspection →</a>
+      </div>
+      {reports.length > 0 && (
+        <div className="c">
+          <h2>Your reports</h2>
+          <p className="d">Locked move-in reports on this lease — tap View to open or share for signature.</p>
+          {reports.map(r => (
+            <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 4px', borderBottom: '1px solid var(--line)', fontSize: 14 }}>
+              <span style={{ fontSize: 20 }}>📋</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.unit_address || 'Move-in report'}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+                  Locked {new Date(r.locked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {r.landlord_signed_at ? ` · ✍️ signed by ${r.landlord_name}` : ' · awaiting landlord signature'}
+                </div>
+              </div>
+              <button className="bg2" onClick={() => window.open(`/sign/${r.token}`, '_blank', 'noopener')}>View</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 
