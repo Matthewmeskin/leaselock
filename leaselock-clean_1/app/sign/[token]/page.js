@@ -78,8 +78,9 @@ export default function SignReportPage() {
               <div style={{ background: 'var(--mint-soft)', border: '1px solid var(--line-strong)', borderRadius: 16, padding: '14px 20px', marginBottom: 16, fontSize: 14, lineHeight: 1.55 }}>
                 🏠 <b>Property record:</b>{' '}
                 {[
-                  report.property.bedrooms && `${report.property.bedrooms} bed`,
-                  report.property.bathrooms && `${report.property.bathrooms} bath`,
+                  report.property.units > 1 && `${report.property.units}-unit building`,
+                  !(report.property.units > 1) && report.property.bedrooms && `${report.property.bedrooms} bed`,
+                  !(report.property.units > 1) && report.property.bathrooms && `${report.property.bathrooms} bath`,
                   report.property.sqft && `${Math.round(report.property.sqft).toLocaleString()} sqft`,
                   report.property.yearBuilt && `built ${report.property.yearBuilt}`,
                   report.property.use,
