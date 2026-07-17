@@ -3,8 +3,19 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Logo from '../components/Logo'
+import GeneratingLoader from '../components/GeneratingLoader'
 import { QUIZ_STEPS } from '../lib/quiz'
 import * as db from '../lib/db'
+
+const LEASE_LOADER_MSGS = [
+  'Reading the fine print so you don’t have to',
+  'Hunting for sneaky fees',
+  'Checking who really pays for repairs',
+  'Decoding the legalese',
+  'Flagging anything that smells off',
+  'Scoring how renter-friendly this is',
+  'Drafting questions for your landlord',
+]
 
 /* ---------- helpers ---------- */
 async function callAPI(system, user, images, pdf) {
@@ -113,62 +124,6 @@ function Quiz({ onComplete }) {
 }
 
 /* ---------- Dashboard ---------- */
-function MiniCalendar({ events, onAdd }) {
-  const [view, setView] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1) })
-  const [sel, setSel] = useState(null)
-  const y = view.getFullYear(), m = view.getMonth()
-  const pad = n => String(n).padStart(2, '0')
-  const now = new Date()
-  const todayKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-  const firstDow = new Date(y, m, 1).getDay()
-  const daysInMonth = new Date(y, m + 1, 0).getDate()
-  const fmt = d => `${y}-${pad(m + 1)}-${pad(d)}`
-  const byDate = {}
-  ;(events || []).forEach(e => { (byDate[e.date] = byDate[e.date] || []).push(e) })
-  const cells = []
-  for (let i = 0; i < firstDow; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-  const selEvents = sel ? (byDate[sel] || []) : []
-  return (
-    <div className="c">
-      <div className="cal-head">
-        <h2 style={{ margin: 0 }}>Calendar</h2>
-        <div className="cal-nav">
-          <button onClick={() => { setView(new Date(y, m - 1, 1)); setSel(null) }} aria-label="Previous month">‹</button>
-          <span className="cal-month">{view.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
-          <button onClick={() => { setView(new Date(y, m + 1, 1)); setSel(null) }} aria-label="Next month">›</button>
-        </div>
-      </div>
-      <div className="cal-grid cal-dow">
-        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} className="cal-dowc">{d}</div>)}
-      </div>
-      <div className="cal-grid">
-        {cells.map((d, i) => {
-          if (d === null) return <div key={i} className="cal-cell empty" />
-          const k = fmt(d)
-          const evs = byDate[k] || []
-          return (
-            <button key={i} className={`cal-cell ${k === todayKey ? 'today' : ''} ${k === sel ? 'sel' : ''} ${evs.length ? 'has' : ''}`} onClick={() => setSel(evs.length ? k : null)}>
-              <span>{d}</span>
-              {evs.length > 0 && <span className="cal-dot" />}
-            </button>
-          )
-        })}
-      </div>
-      {sel && selEvents.length > 0 && (
-        <div className="cal-day-events">
-          <div className="cal-day-label">{new Date(sel + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</div>
-          {selEvents.map(e => {
-            const def = EVT.find(x => x[0] === e.type) || EVT[4]
-            return <div className="cal-ev" key={e.id}><span>{def[2]}</span><b>{e.title}</b></div>
-          })}
-        </div>
-      )}
-      <button className="bg2" style={{ marginTop: 14 }} onClick={onAdd}>Add a date</button>
-    </div>
-  )
-}
-
 function Dashboard({ go, profile }) {
   const [cal, setCal] = useState([])
   const [maint, setMaint] = useState([])
@@ -216,20 +171,27 @@ function Dashboard({ go, profile }) {
         <div className="tile"><div className="t-lab">Deposit protected</div><div className="t-num brand">{(cal.length || maint.length || rent.length) ? 'Yes' : '—'}</div></div>
       </div>
 
-      <MiniCalendar events={cal} onAdd={() => go('calendar')} />
-
       <div className="c">
-        <h2>Next deadlines</h2>
-        <p className="d">The dates that protect your deposit. Add them in the Lease calendar so you never miss notice.</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <h2 style={{ margin: 0 }}>Key dates</h2>
+          <button className="bg2" onClick={() => go('calendar')}>Add a date</button>
+        </div>
+        <p className="d" style={{ marginTop: 6 }}>The dates that protect your deposit — notice deadlines, rent, lease end.</p>
         {upcoming.length === 0 ? (
-          <div className="empty"><div className="e-ic">📅</div>No deadlines yet. <button className="bg2" style={{ marginLeft: 8 }} onClick={() => go('calendar')}>Add one</button></div>
+          <div className="empty"><div className="e-ic">📅</div>No key dates yet. <button className="bg2" style={{ marginLeft: 8 }} onClick={() => go('calendar')}>Add one</button></div>
         ) : upcoming.map(e => {
           const d = daysUntil(e.date)
+          const def = EVT.find(x => x[0] === e.type) || EVT[4]
           return (
             <div className="dash-row" key={e.id}>
-              <span className="rdot" style={{ background: d <= 7 ? '#c0392b' : 'var(--brand)' }} />
+              <span style={{ fontSize: 17 }}>{def[2]}</span>
               <b>{e.title}</b>
-              <span className="meta">{d === 0 ? 'Today' : `in ${d} day${d > 1 ? 's' : ''}`}</span>
+              <span className="meta" style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+                {new Date(e.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                <span style={{ fontWeight: 700, color: d <= 7 ? '#c0392b' : 'var(--brand)', marginLeft: 8 }}>
+                  {d === 0 ? 'Today' : `in ${d} day${d > 1 ? 's' : ''}`}
+                </span>
+              </span>
             </div>
           )
         })}
@@ -276,6 +238,8 @@ function LeaseReview({ profile }) {
     const r = new FileReader()
     r.onload = () => { setPdfData(r.result); setPdfName(f.name); setRaw('') }
     r.readAsDataURL(f)
+    // Persist the lease to household documents (shared with roommates).
+    db.uploadDocument(f, { name: f.name, kind: 'lease', context: 'Lease review' }).catch(() => {})
   }
 
   function onPdf(e) {
@@ -361,7 +325,13 @@ function LeaseReview({ profile }) {
         </div>
       </div>
 
-      {data && (
+      {loading && (
+        <div className="c">
+          <GeneratingLoader title="Reviewing your lease" msgs={LEASE_LOADER_MSGS} />
+        </div>
+      )}
+
+      {!loading && data && (
         <div className="c">
           {reviewedAt && <div className="review-stamp">🔒 Reviewed {reviewedAt}</div>}
           <div className="ring-wrap">
@@ -422,6 +392,12 @@ function MoveIn({ profile }) {
     if (!files.length) return
     const c = await Promise.all(files.map(f => downscale(f)))
     setPhotos(p => [...p, ...c].slice(0, 6))
+    // Persist to household documents (shared with roommates).
+    c.forEach((dataUrl) => {
+      db.dataUrlToBlob(dataUrl)
+        .then(b => db.uploadDocument(b, { name: `${room} photo.jpg`, kind: 'photo', context: `Move-in · ${room}` }))
+        .catch(() => {})
+    })
   }
 
   async function onFiles(e) {
@@ -975,6 +951,89 @@ function Household() {
   )
 }
 
+/* ---------- Documents ---------- */
+const DOC_ICONS = { lease: '📄', photo: '📸', file: '📎' }
+
+function Documents() {
+  const [docs, setDocs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef()
+
+  async function load() {
+    try { setDocs(await db.listDocuments()) } catch (e) { console.error(e) }
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function onUpload(e) {
+    const files = Array.from(e.target.files || [])
+    e.target.value = ''
+    if (!files.length) return
+    setUploading(true)
+    for (const f of files) {
+      try {
+        await db.uploadDocument(f, { name: f.name, kind: f.type === 'application/pdf' ? 'lease' : f.type.startsWith('image/') ? 'photo' : 'file' })
+      } catch (err) { alert(`Could not upload ${f.name}: ${err.message}`) }
+    }
+    setUploading(false)
+    load()
+  }
+
+  async function open(doc) {
+    try {
+      const url = await db.documentUrl(doc.storage_path)
+      window.open(url, '_blank', 'noopener')
+    } catch { alert('Could not open this document. Try again.') }
+  }
+
+  async function remove(doc) {
+    if (!confirm(`Delete "${doc.name}"? This removes it for everyone on the lease.`)) return
+    try { await db.deleteDocument(doc); setDocs(d => d.filter(x => x.id !== doc.id)) } catch (e) { alert(e.message) }
+  }
+
+  const fmtSize = (b) => !b ? '' : b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`
+
+  return (
+    <div className="c">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h2 style={{ margin: 0 }}>Documents</h2>
+        <button className="bg2" onClick={() => fileRef.current?.click()} disabled={uploading}>
+          {uploading ? 'Uploading…' : '+ Upload'}
+        </button>
+        <input ref={fileRef} type="file" multiple onChange={onUpload} style={{ display: 'none' }} />
+      </div>
+      <p className="d" style={{ marginTop: 6 }}>
+        Everything uploaded here — and every lease PDF or move-in photo you add anywhere in the app — is saved
+        and visible to everyone on your shared lease.
+      </p>
+      {loading ? (
+        <p className="d">Loading…</p>
+      ) : docs.length === 0 ? (
+        <div className="empty"><div className="e-ic">📁</div>No documents yet. Upload a lease, receipts, or photos — or add them through Lease review and Move-in report.</div>
+      ) : (
+        <div>
+          {docs.map(doc => (
+            <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 4px', borderBottom: '1px solid var(--line)', fontSize: 14 }}>
+              <span style={{ fontSize: 20 }}>{DOC_ICONS[doc.kind] || '📎'}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+                  {doc.context ? `${doc.context} · ` : ''}
+                  {new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {doc.size_bytes ? ` · ${fmtSize(doc.size_bytes)}` : ''}
+                </div>
+              </div>
+              <button className="bg2" onClick={() => open(doc)}>View</button>
+              <button onClick={() => remove(doc)} aria-label={`Delete ${doc.name}`} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-soft)', fontSize: 16 }}>🗑</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ---------- App shell ---------- */
 // Messages tab removed
 const NAV = [
@@ -986,6 +1045,7 @@ const NAV = [
   ['calendar', 'Lease calendar', '📅'],
   ['maint', 'Maintenance', '🔧'],
   ['rent', 'Rent log', '💵'],
+  ['documents', 'Documents', '📁'],
 ]
 const TITLES = {
   home: 'Dashboard',
@@ -996,6 +1056,7 @@ const TITLES = {
   calendar: 'Lease calendar',
   maint: 'Maintenance tracker',
   rent: 'Rent log',
+  documents: 'Documents',
 }
 
 export default function App() {
@@ -1097,6 +1158,7 @@ export default function App() {
           {tab === 'calendar' && <Calendar />}
           {tab === 'maint' && <Maintenance />}
           {tab === 'rent' && <RentLog />}
+          {tab === 'documents' && <Documents />}
         </div>
       </main>
     </div>

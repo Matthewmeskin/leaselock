@@ -3,8 +3,9 @@ import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import AddressAutocomplete from '../components/AddressAutocomplete'
 import Logo from '../components/Logo'
+import GeneratingLoader from '../components/GeneratingLoader'
 import { profileToReadable } from '../lib/quiz'
-import { getProfile } from '../lib/db'
+import { getProfile, saveMoveInReport, latestMoveInReport, refreshMoveInReport, updateMoveInReportText, uploadDocument, dataUrlToBlob } from '../lib/db'
 
 async function callAPI(system, user, images) {
   const res = await fetch('/api/claude', {
@@ -57,28 +58,12 @@ const LOADER_MSGS = [
   'Building your deposit force field',
   'Making the landlord a little nervous',
 ]
-function GeneratingLoader() {
-  const [i, setI] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setI(n => (n + 1) % LOADER_MSGS.length), 1500)
-    return () => clearInterval(t)
-  }, [])
-  return (
-    <div className="gen-wrap">
-      <div className="gen-scene">
-        <Logo size={96} className="gen-house" />
-        <span className="gen-glass">🔍</span>
-      </div>
-      <h2 className="gen-title">Writing your report</h2>
-      <p className="gen-msg" key={i}>{LOADER_MSGS[i]}…</p>
-      <div className="gen-dots"><span /><span /><span /></div>
-    </div>
-  )
-}
 
 export default function Report() {
   const [step, setStep] = useState('rooms') // rooms | room-detail | review | generating | locked
   const [liveText, setLiveText] = useState('')
+  const [saved, setSaved] = useState(null) // DB row once the report is stored (id, token, landlord signature)
+  const [copied, setCopied] = useState(false)
   const [roomIdx, setRoomIdx] = useState(0)
   const [roomData, setRoomData] = useState({})
   const [tenantName, setTenantName] = useState('')
@@ -89,6 +74,16 @@ export default function Report() {
   const [profile, setProfile] = useState(null)
   useEffect(() => {
     getProfile().then(p => { if (p) setProfile(p) }).catch(() => {})
+    // Restore the most recent locked report so it survives refreshes.
+    latestMoveInReport().then(r => {
+      if (!r) return
+      setSaved(r)
+      setUnitAddress(r.unit_address || '')
+      setTenantName(r.tenant_name || '')
+      setReportText(r.report_text)
+      setLockTs(new Date(r.locked_at).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))
+      setStep('locked')
+    }).catch(() => {})
   }, [])
   const profileRows = profileToReadable(profile)
   const fileRef = useRef()
@@ -136,6 +131,12 @@ export default function Report() {
     if (!files.length) return
     const scaled = await Promise.all(files.map(f => downscale(f)))
     updateRoom({ photos: [...current.photos, ...scaled].slice(0, 8) })
+    // Persist to household documents (shared with roommates).
+    scaled.forEach((dataUrl) => {
+      dataUrlToBlob(dataUrl)
+        .then(b => uploadDocument(b, { name: `${room.name} photo.jpg`, kind: 'photo', context: `Move-in report · ${room.name}` }))
+        .catch(() => {})
+    })
   }
 
   async function onFiles(e) {
@@ -228,6 +229,22 @@ export default function Report() {
       if (!text.trim()) throw new Error('The AI returned an empty report. Please try again.')
       setReportText(text)
       setLockTs(new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))
+      // Persist the locked report so it survives refreshes and can be sent for signature.
+      try {
+        const roomsSummary = activeRooms.map(r => {
+          const d = roomData[r.name]
+          if (!d) return null
+          return {
+            name: r.name, emoji: r.emoji,
+            status: d.allGood ? 'Good — no issues' : (d.issues?.length ? d.issues.join(', ') : 'Reviewed'),
+            note: d.note || '', photos: d.photos.length,
+          }
+        }).filter(Boolean)
+        const row = await saveMoveInReport({ unitAddress, tenantName, reportText: text, rooms: roomsSummary })
+        setSaved(row)
+      } catch (err) {
+        console.error('Could not save report', err)
+      }
       setStep('locked')
     } catch (e) {
       alert(`Report generation failed: ${e.message || 'Unknown error'}`)
@@ -459,7 +476,7 @@ export default function Report() {
 
   if (step === 'generating') return (
     <div className="wz" style={{ alignItems: 'center', justifyContent: 'center' }}>
-      <GeneratingLoader />
+      <GeneratingLoader title="Writing your report" msgs={LOADER_MSGS} />
       {liveText && (
         <div style={{
           maxWidth: 640, width: '100%', margin: '18px auto 40px', padding: '18px 22px',
@@ -491,15 +508,21 @@ export default function Report() {
           <div className="wz-receipt">
             {unitAddress && <div className="row"><span className="k">Unit</span><span className="v">{unitAddress}</span></div>}
             {tenantName && <div className="row"><span className="k">Tenant</span><span className="v">{tenantName}</span></div>}
-            <div className="row"><span className="k">Rooms documented</span><span className="v">{Object.keys(roomData).length}</span></div>
-            <div className="row"><span className="k">Photos taken</span><span className="v">{totalPhotos()}</span></div>
+            <div className="row"><span className="k">Rooms documented</span><span className="v">{Object.keys(roomData).length || (saved?.rooms?.length ?? 0)}</span></div>
+            <div className="row"><span className="k">Photos taken</span><span className="v">{totalPhotos() || (saved?.rooms?.reduce((n, r) => n + (r.photos || 0), 0) ?? 0)}</span></div>
             <div className="row"><span className="k">Locked</span><span className="v">🔒 {lockTs}</span></div>
+            {saved?.landlord_signed_at && (
+              <div className="row"><span className="k">Landlord signed</span><span className="v">✍️ {saved.landlord_name} · {new Date(saved.landlord_signed_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span></div>
+            )}
           </div>
 
           <div className="report-doc">
             <div className="report-doc-head">
               <h3>AI condition report</h3>
-              <button className="report-edit-btn no-print" onClick={() => setEditingReport(v => !v)}>{editingReport ? '✓ Done' : '✎ Edit'}</button>
+              <button className="report-edit-btn no-print" onClick={() => {
+                if (editingReport && saved) updateMoveInReportText(saved.id, reportText).catch(() => {})
+                setEditingReport(v => !v)
+              }}>{editingReport ? '✓ Done' : '✎ Edit'}</button>
             </div>
             {editingReport && <p className="report-edit-hint no-print">Fix anything the AI got wrong. Your edits are saved into the report.</p>}
             {editingReport
@@ -549,9 +572,40 @@ export default function Report() {
             </div>
           )}
 
+          {saved && (
+            <div className="no-print" style={{ background: '#fff', border: '1px solid var(--line)', borderRadius: 16, padding: '20px 22px', marginTop: 18, textAlign: 'left' }}>
+              <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 17, margin: 0 }}>Landlord signature</h3>
+              {saved.landlord_signed_at ? (
+                <div style={{ marginTop: 12, background: 'var(--mint-soft)', border: '1px solid var(--line-strong)', borderRadius: 12, padding: '12px 16px', fontSize: 14.5 }}>
+                  ✍️ Signed by <b>{saved.landlord_name}</b> on {new Date(saved.landlord_signed_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Your report is acknowledged.
+                </div>
+              ) : (
+                <>
+                  <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', margin: '6px 0 12px' }}>
+                    Send this link to your landlord — they can review the report and sign it, no account needed.
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <code style={{ flex: '1 1 220px', fontSize: 12.5, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, padding: '10px 12px', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+                      {`${typeof window !== 'undefined' ? window.location.origin : ''}/sign/${saved.token}`}
+                    </code>
+                    <button className="bg2" onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/sign/${saved.token}`)
+                      setCopied(true); setTimeout(() => setCopied(false), 2000)
+                    }}>{copied ? '✓ Copied' : 'Copy link'}</button>
+                    <a className="bg2" style={{ textDecoration: 'none' }} href={`mailto:?subject=${encodeURIComponent('Move-in condition report — please review and sign')}&body=${encodeURIComponent(`Hi,\n\nHere is the move-in condition report for ${unitAddress || 'the unit'}. Please review and sign it here:\n\n${typeof window !== 'undefined' ? window.location.origin : ''}/sign/${saved.token}\n\nThanks,\n${tenantName || ''}`)}`}>Email to landlord</a>
+                    <button className="bg2" onClick={() => refreshMoveInReport(saved.id).then(r => r && setSaved(r)).catch(() => {})}>Check for signature</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }} className="no-print">
             <button className="bp" onClick={() => { setEditingReport(false); setTimeout(() => window.print(), 60) }}>Print / save as PDF</button>
             <Link href="/app" className="bg2" style={{ padding: '12px 20px', borderRadius: 999, fontSize: 14.5, fontWeight: 600, color: 'var(--brand)', border: '1.5px solid var(--line-strong)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Go to my dashboard</Link>
+            <button className="bg2" onClick={() => {
+              setSaved(null); setRoomData({}); setReportText(''); setEditingReport(false); setLiveText(''); setRoomIdx(0); setStep('rooms')
+            }}>Start a new report</button>
           </div>
         </div>
       </div>

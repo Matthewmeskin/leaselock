@@ -328,6 +328,112 @@ export async function saveLeaseReview(reviewData) {
   if (error) throw error
 }
 
+/* ---------------- Move-in reports (saved + shared with landlord) ---------------- */
+export async function saveMoveInReport({ unitAddress, tenantName, reportText, rooms }) {
+  const supabase = createClient()
+  const user = await getCurrentUser()
+  if (!user) throw new Error('Not signed in')
+  const { data, error } = await supabase
+    .from('shared_reports')
+    .insert({
+      created_by: user.id,
+      unit_address: unitAddress || null,
+      tenant_name: tenantName || null,
+      report_text: reportText,
+      rooms: rooms || [],
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function latestMoveInReport() {
+  const supabase = createClient()
+  const user = await getCurrentUser()
+  if (!user) return null
+  const { data, error } = await supabase
+    .from('shared_reports')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function refreshMoveInReport(id) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('shared_reports')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+export async function updateMoveInReportText(id, text) {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('shared_reports')
+    .update({ report_text: text })
+    .eq('id', id)
+  if (error) throw error
+}
+
+/* ---------------- Household documents (storage-backed) ---------------- */
+export async function dataUrlToBlob(dataUrl) {
+  const res = await fetch(dataUrl)
+  return res.blob()
+}
+
+// Upload a file/blob to household storage and record it. Visible to all roommates.
+export async function uploadDocument(blob, { name, kind = 'file', context = null }) {
+  const supabase = createClient()
+  const user = await getCurrentUser()
+  if (!user) throw new Error('Not signed in')
+  const household_id = await activeHouseholdId()
+  const safeName = (name || 'file').replace(/[^a-zA-Z0-9._ -]/g, '_')
+  const path = `${household_id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`
+  const { error: upErr } = await supabase.storage
+    .from('documents')
+    .upload(path, blob, { contentType: blob.type || 'application/octet-stream' })
+  if (upErr) throw upErr
+  const { data, error } = await supabase
+    .from('documents')
+    .insert({ household_id, uploaded_by: user.id, name: safeName, kind, context, storage_path: path, size_bytes: blob.size })
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function listDocuments() {
+  const supabase = createClient()
+  await activeHouseholdId() // ensure membership exists before RLS-scoped select
+  const { data, error } = await supabase
+    .from('documents')
+    .select('id, name, kind, context, storage_path, size_bytes, created_at, uploaded_by')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function documentUrl(storagePath) {
+  const supabase = createClient()
+  const { data, error } = await supabase.storage.from('documents').createSignedUrl(storagePath, 3600)
+  if (error) throw error
+  return data.signedUrl
+}
+
+export async function deleteDocument(doc) {
+  const supabase = createClient()
+  await supabase.storage.from('documents').remove([doc.storage_path])
+  const { error } = await supabase.from('documents').delete().eq('id', doc.id)
+  if (error) throw error
+}
+
 export async function signOut() {
   const supabase = createClient()
   clearHouseholdCache()
