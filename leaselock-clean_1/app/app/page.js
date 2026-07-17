@@ -916,7 +916,7 @@ function Household() {
 
       <div className="c">
         <h2>Invite roommates</h2>
-        <p className="d">Share this link with your roommates. They sign in with Google and instantly join this lease.</p>
+        <p className="d">Share this link with your roommates. They create a free account and instantly join this lease.</p>
         <span className="lab">Invite code</span>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <input className="inp" style={{ flex: 1, fontFamily: 'monospace', letterSpacing: '0.04em' }} readOnly value={hh?.inviteCode || ''} placeholder="Loading…" onFocus={e => e.target.select()} />
