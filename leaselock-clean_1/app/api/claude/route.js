@@ -36,7 +36,7 @@ function friendlyError(e) {
 export async function POST(req) {
   try {
     const client = getClient()
-    const { system, user, images, pdf } = await req.json()
+    const { system, user, images, pdf, stream } = await req.json()
     const content = []
     if (pdf) {
       const data = pdf.includes(',') ? pdf.split(',')[1] : pdf
@@ -50,6 +50,43 @@ export async function POST(req) {
       }
     }
     content.push({ type: 'text', text: user })
+
+    if (stream) {
+      // Stream text deltas as plain text so the client can render progress live.
+      const msgStream = client.messages.stream({
+        model: MODEL,
+        max_tokens: 2048,
+        system,
+        messages: [{ role: 'user', content }],
+      })
+      const iterator = msgStream[Symbol.asyncIterator]()
+      // Await the first event before committing to a stream response, so
+      // auth/model errors still surface as a JSON error with a real status.
+      const first = await iterator.next()
+      const encoder = new TextEncoder()
+      const body = new ReadableStream({
+        async start(controller) {
+          try {
+            let ev = first
+            while (!ev.done) {
+              const event = ev.value
+              if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                controller.enqueue(encoder.encode(event.delta.text))
+              }
+              ev = await iterator.next()
+            }
+            controller.close()
+          } catch (err) {
+            console.error('Claude stream error:', err?.message)
+            controller.error(err)
+          }
+        },
+      })
+      return new Response(body, {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+      })
+    }
+
     const msg = await client.messages.create({
       model: MODEL,
       max_tokens: 2048,
