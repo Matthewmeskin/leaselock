@@ -25,15 +25,15 @@ export function HeroCardAB() {
       <div className="report-card">
         <div className="rc-top">
           <span className="rc-title">Lease review complete</span>
-          <span className="rc-lock">✓ Scored 72/100 · Sign with caution</span>
+          <span className="rc-lock">✓ Scored 72/100 · caution</span>
         </div>
         <div className="rc-body">
-          <div className="rc-row"><span className="rc-room">📖 Plain-English summary</span><span className="rc-note">12 pages of legalese, decoded in seconds</span></div>
-          <div className="rc-row"><span className="rc-room">🚩 3 risky clauses flagged</span><span className="rc-note">auto-renewal · late fees · joint liability</span></div>
-          <div className="rc-row"><span className="rc-room">❓ 5 questions to ask</span><span className="rc-note">ready to send before you sign</span></div>
+          <div className="rc-row"><span className="rc-room">📖 Plain-English summary</span><span className="rc-note">12 pages of legalese, decoded</span></div>
+          <div className="rc-row"><span className="rc-room">🚩 3 risky clauses flagged</span><span className="rc-note">auto-renewal · late fees · liability</span></div>
+          <div className="rc-row"><span className="rc-room">❓ 5 questions to ask</span><span className="rc-note">ready before you sign</span></div>
           <div className="rc-acks">
-            <div className="rc-ack"><span className="rc-check">✓</span><span><b>You know what you&apos;re signing</b> · every clause explained</span></div>
-            <div className="rc-ack"><span className="rc-check">✓</span><span><b>Deposit protected</b> · move-in documented from day one</span></div>
+            <div className="rc-ack"><span className="rc-check">✓</span><span><b>Every clause explained</b> · in plain English</span></div>
+            <div className="rc-ack"><span className="rc-check">✓</span><span><b>Deposit protected</b> · from day one</span></div>
           </div>
         </div>
       </div>
