@@ -15,6 +15,50 @@ const COPY = {
   },
 }
 
+// The mock product card next to the hero, themed to match the variant's story.
+export function HeroCardAB() {
+  const [variant, setVariant] = useState(null)
+  useEffect(() => { setVariant(getVariant()) }, [])
+
+  if (variant === 'comprehension') {
+    return (
+      <div className="report-card">
+        <div className="rc-top">
+          <span className="rc-title">Lease review complete</span>
+          <span className="rc-lock">✓ Scored 72/100 · Sign with caution</span>
+        </div>
+        <div className="rc-body">
+          <div className="rc-row"><span className="rc-room">📖 Plain-English summary</span><span className="rc-note">12 pages of legalese, decoded in seconds</span></div>
+          <div className="rc-row"><span className="rc-room">🚩 3 risky clauses flagged</span><span className="rc-note">auto-renewal · late fees · joint liability</span></div>
+          <div className="rc-row"><span className="rc-room">❓ 5 questions to ask</span><span className="rc-note">ready to send before you sign</span></div>
+          <div className="rc-acks">
+            <div className="rc-ack"><span className="rc-check">✓</span><span><b>You know what you&apos;re signing</b> · every clause explained</span></div>
+            <div className="rc-ack"><span className="rc-check">✓</span><span><b>Deposit protected</b> · move-in documented from day one</span></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="report-card">
+      <div className="rc-top">
+        <span className="rc-title">Protection setup complete</span>
+        <span className="rc-lock">✓ Ready · Jun 1, 2026 · 4:12 PM</span>
+      </div>
+      <div className="rc-body">
+        <div className="rc-row"><span className="rc-room">📄 Lease reviewed</span><span className="rc-note">3 high-risk clauses flagged · questions ready</span></div>
+        <div className="rc-row"><span className="rc-room">📸 Move-in documented</span><span className="rc-note">4 rooms · 14 photos · AI condition notes</span></div>
+        <div className="rc-row"><span className="rc-room">📅 Deadlines tracked</span><span className="rc-note">Notice deadline: 60 days out</span></div>
+        <div className="rc-acks">
+          <div className="rc-ack"><span className="rc-check">✓</span><span><b>Deposit protected</b> · report locked and timestamped</span></div>
+          <div className="rc-ack"><span className="rc-check">✓</span><span><b>Move-out ready</b> · evidence on file</span></div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function HeroAB() {
   const [variant, setVariant] = useState(null)
   const [email, setEmail] = useState('')
