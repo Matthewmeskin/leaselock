@@ -303,20 +303,20 @@ export default function Report() {
                   <div style={{ fontSize: 24 }}>{r.emoji}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, marginTop: 5, color: on ? 'var(--brand)' : 'var(--ink)' }}>{r.name}</div>
                   {done && <div style={{ fontSize: 11, color: 'var(--brand)', marginTop: 3 }}>✓ {done.photos.length} photo{done.photos.length !== 1 ? 's' : ''}</div>}
+                  {on && !r.custom && ['Bedroom', 'Bathroom', 'Living room', 'Other / storage'].includes(r.name) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); addAnother(r.name) }}
+                      style={{ marginTop: 7, background: '#fff', border: '1px solid var(--line-strong)', borderRadius: 999, padding: '3px 10px', fontSize: 11.5, fontWeight: 600, color: 'var(--brand)', cursor: 'pointer', fontFamily: 'var(--font-body)' }}
+                    >
+                      + Add another
+                    </button>
+                  )}
                 </div>
               )
             })}
           </div>
-          <div style={{ marginTop: 16 }}>
-            <span style={{ fontSize: 13, color: 'var(--ink-soft)', display: 'block', marginBottom: 8 }}>More of a room? Add another:</span>
-            <div className="wz-chips">
-              {['Bedroom', 'Bathroom', 'Living room', 'Other / storage'].map(b => (
-                <button key={b} className="wz-chip" onClick={() => addAnother(b)}>+ {b}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-            <input className="wz-input" style={{ flex: 1 }} placeholder="Or name a custom room (e.g. Garage, Office)" value={newRoom} onChange={e => setNewRoom(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomRoom() } }} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <input className="wz-input" style={{ flex: 1 }} placeholder="Add a custom room (e.g. Garage, Office)" value={newRoom} onChange={e => setNewRoom(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomRoom() } }} />
             <button onClick={addCustomRoom} disabled={!newRoom.trim()} style={{ padding: '0 20px', borderRadius: 13, border: 'none', background: 'var(--brand)', color: '#fff', fontWeight: 600, fontSize: 15, fontFamily: 'var(--font-body)', cursor: newRoom.trim() ? 'pointer' : 'default', opacity: newRoom.trim() ? 1 : 0.45 }}>Add</button>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import SiteNav from './_components/SiteNav'
 import Logo from './components/Logo'
-import HeroAB from './_components/HeroAB'
+import HeroAB, { HeroCardAB } from './_components/HeroAB'
 
 export default function Landing() {
   return (
@@ -20,21 +20,7 @@ export default function Landing() {
             </div>
           </div>
 
-          <div className="report-card">
-            <div className="rc-top">
-              <span className="rc-title">Protection setup complete</span>
-              <span className="rc-lock">✓ Ready · Jun 1, 2026 · 4:12 PM</span>
-            </div>
-            <div className="rc-body">
-              <div className="rc-row"><span className="rc-room">📄 Lease reviewed</span><span className="rc-note">3 high-risk clauses flagged · questions ready</span></div>
-              <div className="rc-row"><span className="rc-room">📸 Move-in documented</span><span className="rc-note">4 rooms · 14 photos · AI condition notes</span></div>
-              <div className="rc-row"><span className="rc-room">📅 Deadlines tracked</span><span className="rc-note">Notice deadline: 60 days out</span></div>
-              <div className="rc-acks">
-                <div className="rc-ack"><span className="rc-check">✓</span><span><b>Deposit protected</b> · report locked and timestamped</span></div>
-                <div className="rc-ack"><span className="rc-check">✓</span><span><b>Move-out ready</b> · evidence on file</span></div>
-              </div>
-            </div>
-          </div>
+          <HeroCardAB />
         </div>
       </header>
 
