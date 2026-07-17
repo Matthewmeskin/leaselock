@@ -1,7 +1,14 @@
+import { NextResponse } from 'next/server'
 import { updateSession } from './app/lib/supabase/middleware'
 
 export async function middleware(request) {
-  return await updateSession(request)
+  try {
+    return await updateSession(request)
+  } catch (error) {
+    // Never let an auth/session failure take down the whole site.
+    console.error('Middleware error, passing request through:', error)
+    return NextResponse.next({ request })
+  }
 }
 
 export const config = {
