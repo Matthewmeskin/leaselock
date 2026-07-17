@@ -329,7 +329,7 @@ export async function saveLeaseReview(reviewData) {
 }
 
 /* ---------------- Move-in reports (saved + shared with landlord) ---------------- */
-export async function saveMoveInReport({ unitAddress, tenantName, reportText, rooms }) {
+export async function saveMoveInReport({ unitAddress, tenantName, reportText, rooms, property }) {
   const supabase = createClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('Not signed in')
@@ -344,6 +344,7 @@ export async function saveMoveInReport({ unitAddress, tenantName, reportText, ro
       tenant_name: tenantName || null,
       report_text: reportText,
       rooms: rooms || [],
+      property: property || null,
     })
     .select('*')
     .single()
@@ -396,6 +397,17 @@ export async function updateMoveInReportText(id, text) {
     .update({ report_text: text })
     .eq('id', id)
   if (error) throw error
+}
+
+// Photos shared with the landlord view live in a public bucket under an
+// unguessable per-report folder — same trust model as the signing token.
+export async function uploadReportPhoto(path, blob) {
+  const supabase = createClient()
+  const { error } = await supabase.storage
+    .from('report-photos')
+    .upload(path, blob, { contentType: blob.type || 'image/jpeg' })
+  if (error) throw error
+  return supabase.storage.from('report-photos').getPublicUrl(path).data.publicUrl
 }
 
 /* ---------------- Household documents (storage-backed) ---------------- */

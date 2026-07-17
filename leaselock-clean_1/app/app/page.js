@@ -353,7 +353,7 @@ function LeaseReview({ profile }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
-                  Uploaded {new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  Uploaded 🕐 {new Date(doc.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                 </div>
               </div>
               <button className="bg2" onClick={() => db.documentUrl(doc.storage_path).then(u => window.open(u, '_blank', 'noopener')).catch(() => alert('Could not open this file.'))}>View</button>
@@ -729,7 +729,7 @@ function MoveInLauncher() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.unit_address || 'Move-in report'}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
-                  Locked {new Date(r.locked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  Locked 🕐 {new Date(r.locked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                   {r.landlord_signed_at ? ` · ✍️ signed by ${r.landlord_name}` : ' · awaiting landlord signature'}
                 </div>
               </div>
@@ -1079,7 +1079,7 @@ function Documents() {
                   Move-in report{r.unit_address ? ` — ${r.unit_address}` : ''}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
-                  Locked {new Date(r.locked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  Locked 🕐 {new Date(r.locked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                   {r.landlord_signed_at ? ` · ✍️ signed by ${r.landlord_name}` : ' · awaiting landlord signature'}
                 </div>
               </div>
@@ -1093,7 +1093,7 @@ function Documents() {
                 <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.name}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
                   {doc.context ? `${doc.context} · ` : ''}
-                  {new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  🕐 {new Date(doc.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                   {doc.size_bytes ? ` · ${fmtSize(doc.size_bytes)}` : ''}
                 </div>
               </div>

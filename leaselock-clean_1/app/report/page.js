@@ -7,7 +7,7 @@ import GeneratingLoader from '../components/GeneratingLoader'
 import FakeDoor from '../components/FakeDoor'
 import { track } from '../lib/analytics'
 import { profileToReadable } from '../lib/quiz'
-import { getProfile, saveMoveInReport, latestMoveInReport, refreshMoveInReport, updateMoveInReportText, uploadDocument, dataUrlToBlob } from '../lib/db'
+import { getProfile, saveMoveInReport, latestMoveInReport, refreshMoveInReport, updateMoveInReportText, uploadDocument, uploadReportPhoto, dataUrlToBlob } from '../lib/db'
 
 async function callAPI(system, user, images) {
   const res = await fetch('/api/claude', {
@@ -84,6 +84,7 @@ export default function Report() {
     latestMoveInReport().then(r => {
       if (!r) return
       setSaved(r)
+      if (r.property) setProperty(r.property)
       setUnitAddress(r.unit_address || '')
       setTenantName(r.tenant_name || '')
       setReportText(r.report_text)
@@ -121,6 +122,42 @@ export default function Report() {
     setCustomRooms(c => [...c, { name, emoji: tmpl.emoji, prompts: tmpl.prompts, custom: true }])
     setSelected(s => [...s, name])
   }
+
+  // Free public-record lookup (LA County assessor open data) when an address
+  // is picked from the dropdown. Best-effort: silently skipped outside LA.
+  const [property, setProperty] = useState(null)
+  const [propLoading, setPropLoading] = useState(false)
+  async function lookupProperty(address) {
+    setProperty(null)
+    setPropLoading(true)
+    try {
+      const res = await fetch(`/api/property?q=${encodeURIComponent(address)}`)
+      const p = await res.json()
+      if (p?.found) {
+        setProperty(p)
+        applyPropertyRooms(p)
+        track('property_matched')
+      }
+    } catch { /* lookup is best-effort */ }
+    setPropLoading(false)
+  }
+  function applyPropertyRooms(p) {
+    const beds = Math.min(Math.round(p.bedrooms || 0), 6)
+    const baths = Math.min(Math.round(p.bathrooms || 0), 6)
+    const extras = []
+    for (let i = 2; i <= beds; i++) extras.push({ base: 'Bedroom', name: `Bedroom ${i}` })
+    for (let i = 2; i <= baths; i++) extras.push({ base: 'Bathroom', name: `Bathroom ${i}` })
+    if (!extras.length) return
+    setCustomRooms(c => {
+      const have = new Set([...ROOMS.map(r => r.name), ...c.map(r => r.name)])
+      const add = extras.filter(e => !have.has(e.name)).map(e => {
+        const tmpl = ROOMS.find(r => r.name === e.base)
+        return { name: e.name, emoji: tmpl.emoji, prompts: tmpl.prompts, custom: true }
+      })
+      return add.length ? [...c, ...add] : c
+    })
+    setSelected(s => Array.from(new Set([...s, ...extras.map(e => e.name)])))
+  }
   const room = activeRooms[roomIdx]
   const current = roomData[room?.name] || { photos: [], issues: [], allGood: false, note: '' }
   const condGood = current.allGood === true || current.cond === 'good'
@@ -132,6 +169,8 @@ export default function Report() {
 
   const [dragOver, setDragOver] = useState(false)
   const [scanning, setScanning] = useState(false)
+  const [scanNote, setScanNote] = useState('')
+  useEffect(() => { setScanNote('') }, [roomIdx])
 
   // AI pre-assessment: look at the room's photos and pre-select the condition
   // and issue types. Only applies if the user hasn't chosen anything yet.
@@ -149,7 +188,15 @@ export default function Report() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'scan failed')
-      const parsed = JSON.parse((data.text || '').replace(/```json|```/g, '').trim())
+      // The model sometimes wraps the JSON in prose or fences — extract it.
+      const raw = (data.text || '').replace(/```json|```/g, '').trim()
+      const parsed = JSON.parse((raw.match(/\{[\s\S]*\}/) || [raw])[0])
+      const suggested = Array.isArray(parsed.issues) ? parsed.issues.filter(i => ISSUE_TYPES.includes(i)) : []
+      setScanNote(
+        parsed.condition === 'issues' && suggested.length
+          ? `✨ AI spotted: ${suggested.join(', ')} — pre-filled below, adjust if it's wrong.`
+          : '✨ AI checked your photos — this room looks in good shape.'
+      )
       setRoomData(d => {
         const cur = d[roomName] || { photos, issues: [], allGood: false, note: '' }
         // Respect anything the user already chose.
@@ -160,7 +207,10 @@ export default function Report() {
         }
         return { ...d, [roomName]: { ...cur, cond: 'good', allGood: true, issues: [], aiSuggested: true } }
       })
-    } catch { /* no suggestion — the user picks manually */ }
+    } catch (err) {
+      console.error('Photo scan failed:', err?.message)
+      setScanNote('⚠️ AI couldn’t read these photos — pick the condition yourself below.')
+    }
     setScanning(false)
   }
 
@@ -283,18 +333,31 @@ export default function Report() {
       setLockTs(new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))
       // Persist the locked report so it survives refreshes and can be sent for signature.
       try {
-        const roomsSummary = activeRooms.map(r => {
+        // Landlord-view photos go in a public bucket under an unguessable
+        // folder — same trust model as the signing link itself.
+        const shareId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        const roomsSummary = []
+        for (const r of activeRooms) {
           const d = roomData[r.name]
-          if (!d) return null
-          return {
+          if (!d) continue
+          let photoUrls = []
+          try {
+            const slug = r.name.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()
+            photoUrls = await Promise.all(d.photos.map(async (ph, i) => {
+              const blob = await dataUrlToBlob(ph)
+              return uploadReportPhoto(`${shareId}/${slug}-${i + 1}.jpg`, blob)
+            }))
+          } catch (err) { console.error('Report photo upload failed', err) }
+          roomsSummary.push({
             name: r.name, emoji: r.emoji,
             status: d.allGood ? 'Good — no issues' : (d.issues?.length ? d.issues.join(', ') : 'Reviewed'),
             note: d.note || '', photos: d.photos.length,
+            photo_urls: photoUrls,
             documented_at: d.photoTimes?.[0] || new Date().toISOString(),
             photo_times: d.photoTimes || [],
-          }
-        }).filter(Boolean)
-        const row = await saveMoveInReport({ unitAddress, tenantName, reportText: text, rooms: roomsSummary })
+          })
+        }
+        const row = await saveMoveInReport({ unitAddress, tenantName, reportText: text, rooms: roomsSummary, property })
         setSaved(row)
       } catch (err) {
         console.error('Could not save report', err)
@@ -325,7 +388,24 @@ export default function Report() {
         <p className="wz-p">We'll go room by room. Take photos, note any existing issues, and our AI writes the condition report. Takes about 5 minutes.</p>
         <div className="wz-field">
           <label>Unit address</label>
-          <AddressAutocomplete value={unitAddress} onChange={setUnitAddress} placeholder="123 Main St, Apt 4B" />
+          <AddressAutocomplete value={unitAddress} onChange={setUnitAddress} onSelect={s => lookupProperty(s.text)} placeholder="123 Main St, Apt 4B" />
+          {propLoading && (
+            <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>Checking public property records…</div>
+          )}
+          {property && (
+            <div style={{ marginTop: 8, background: 'var(--mint-soft)', border: '1px solid var(--line-strong)', borderRadius: 12, padding: '10px 14px', fontSize: 13.5, lineHeight: 1.5 }}>
+              🏠 <b>Public record match:</b>{' '}
+              {[
+                property.bedrooms && `${property.bedrooms} bed`,
+                property.bathrooms && `${property.bathrooms} bath`,
+                property.sqft && `${Math.round(property.sqft).toLocaleString()} sqft`,
+                property.yearBuilt && `built ${property.yearBuilt}`,
+                property.use,
+              ].filter(Boolean).join(' · ')}
+              {(property.bedrooms > 1 || property.bathrooms > 1) && <> — we pre-selected the rooms below to match.</>}
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>Source: {property.source} · saved with your report</div>
+            </div>
+          )}
         </div>
         <div className="wz-field">
           <label>Your name</label>
@@ -419,9 +499,9 @@ export default function Report() {
               ✨ AI is checking your photos…
             </div>
           )}
-          {!scanning && current.aiSuggested && (
-            <div style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '4px 0 8px' }}>
-              ✨ Condition pre-filled by AI from your photos — adjust below if it got it wrong.
+          {!scanning && scanNote && (
+            <div style={{ fontSize: 13, color: scanNote.startsWith('⚠️') ? '#c07c0c' : 'var(--ink-soft)', margin: '4px 0 8px' }}>
+              {scanNote}
             </div>
           )}
           {current.photos.length > 0 && (
@@ -465,14 +545,16 @@ export default function Report() {
       </div>
 
       <div className="wz-nav">
-        {!(condGood || condIssues) && (
+        {(current.photos.length === 0 || !(condGood || condIssues)) && (
           <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 }}>
-            Select a condition above to continue — or skip this room.
+            {current.photos.length === 0
+              ? 'Add at least one photo to continue — photos are your evidence. Or skip this room.'
+              : 'Select a condition above to continue — or skip this room.'}
           </div>
         )}
         <div className="wz-nav-row">
           <button className="wz-back" onClick={prevRoom}>Back</button>
-          <button className="wz-next" onClick={nextRoom} disabled={!(condGood || condIssues)}>
+          <button className="wz-next" onClick={nextRoom} disabled={current.photos.length === 0 || !(condGood || condIssues)}>
             {roomIdx < activeRooms.length - 1 ? `Next: ${activeRooms[roomIdx + 1].name} →` : 'Review report →'}
           </button>
         </div>

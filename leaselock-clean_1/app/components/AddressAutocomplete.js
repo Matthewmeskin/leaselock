@@ -1,10 +1,27 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 
-// Two geocoders race in parallel and the fastest non-empty answer wins:
-// Photon (komoot, free, no key) and Geoapify (direct from the browser when a
-// public key is set, otherwise via the /api/places proxy).
+// Providers, in order of preference:
+//  - Radar (api.radar.io) — authoritative when NEXT_PUBLIC_RADAR_KEY is set.
+//    Free tier is 100k calls/month with excellent US address data.
+//  - Geoapify — fallback authority while no Radar key is configured.
+//  - Photon (komoot, free) — provisional fill only, replaced when the
+//    authoritative provider responds.
+const RADAR_KEY = process.env.NEXT_PUBLIC_RADAR_KEY
 const GEO_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY
+
+async function fetchRadar(input, signal) {
+  const res = await fetch(
+    `https://api.radar.io/v1/search/autocomplete?query=${encodeURIComponent(input)}&countryCode=US&limit=6`,
+    { signal, headers: { Authorization: RADAR_KEY } }
+  )
+  if (!res.ok) throw new Error(`radar ${res.status}`)
+  const data = await res.json()
+  return (data.addresses || []).map((a, i) => ({
+    placeId: `rd-${i}-${a.formattedAddress || ''}`,
+    text: (a.formattedAddress || '').replace(/,?\s*(United States of America|United States|USA)$/i, ''),
+  })).filter(s => s.text)
+}
 
 async function fetchPhoton(input, signal) {
   const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(input)}&limit=8&lang=en`, { signal })
@@ -49,7 +66,7 @@ function rankByHouseNumber(list, input) {
   return [...list].sort((a, b) => (/^\d/.test(b.text) ? 1 : 0) - (/^\d/.test(a.text) ? 1 : 0))
 }
 
-export default function AddressAutocomplete({ value, onChange, placeholder, className = 'wz-input' }) {
+export default function AddressAutocomplete({ value, onChange, onSelect, placeholder, className = 'wz-input' }) {
   const [suggestions, setSuggestions] = useState([])
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
@@ -81,9 +98,10 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
     const controller = new AbortController()
     abortRef.current = controller
     setLoading(true); setOpen(true)
-    // Geoapify is authoritative (best US address data); Photon is only a fast
-    // provisional fill while Geoapify is in flight. Geoapify replaces it on arrival.
-    const geoP = fetchGeoapify(input, controller.signal).catch(() => [])
+    // The authoritative provider (Radar when its key is set, else Geoapify)
+    // replaces results on arrival; Photon is only a fast provisional fill.
+    const authoritative = RADAR_KEY ? fetchRadar : fetchGeoapify
+    const geoP = authoritative(input, controller.signal).catch(() => [])
     const photonP = fetchPhoton(input, controller.signal).catch(() => [])
     let settled = false
 
@@ -128,6 +146,7 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
     setSuggestions([])
     setLoading(false)
     onChange(s.text)
+    onSelect?.(s)
   }
 
   function handleKey(e) {

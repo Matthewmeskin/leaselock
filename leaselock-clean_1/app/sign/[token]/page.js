@@ -74,18 +74,43 @@ export default function SignReportPage() {
               </p>
             </div>
 
+            {report.property && (
+              <div style={{ background: 'var(--mint-soft)', border: '1px solid var(--line-strong)', borderRadius: 16, padding: '14px 20px', marginBottom: 16, fontSize: 14, lineHeight: 1.55 }}>
+                🏠 <b>Property record:</b>{' '}
+                {[
+                  report.property.bedrooms && `${report.property.bedrooms} bed`,
+                  report.property.bathrooms && `${report.property.bathrooms} bath`,
+                  report.property.sqft && `${Math.round(report.property.sqft).toLocaleString()} sqft`,
+                  report.property.yearBuilt && `built ${report.property.yearBuilt}`,
+                  report.property.use,
+                ].filter(Boolean).join(' · ')}
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>Source: {report.property.source || 'public records'}</div>
+              </div>
+            )}
+
             {Array.isArray(report.rooms) && report.rooms.length > 0 && (
               <div style={{ background: '#fff', border: '1px solid var(--line)', borderRadius: 16, padding: '18px 22px', marginBottom: 16 }}>
                 <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 17, margin: '0 0 10px' }}>Room-by-room summary</h2>
                 {report.rooms.map((r, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '7px 0', borderBottom: i < report.rooms.length - 1 ? '1px solid var(--line)' : 'none', fontSize: 14 }}>
-                    <span>{r.emoji || '📍'}</span>
-                    <b style={{ minWidth: 120 }}>{r.name}</b>
-                    <span style={{ color: r.status?.startsWith('Good') ? 'var(--brand)' : '#c07c0c' }}>{r.status}</span>
-                    <span style={{ marginLeft: 'auto', color: 'var(--ink-soft)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
-                      {r.photos || 0} photo{r.photos === 1 ? '' : 's'}
-                      {r.documented_at && <> · 🕐 {new Date(r.documented_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</>}
-                    </span>
+                  <div key={i} style={{ padding: '7px 0', borderBottom: i < report.rooms.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 14 }}>
+                      <span>{r.emoji || '📍'}</span>
+                      <b style={{ minWidth: 120 }}>{r.name}</b>
+                      <span style={{ color: r.status?.startsWith('Good') ? 'var(--brand)' : '#c07c0c' }}>{r.status}</span>
+                      <span style={{ marginLeft: 'auto', color: 'var(--ink-soft)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
+                        {r.photos || 0} photo{r.photos === 1 ? '' : 's'}
+                        {r.documented_at && <> · 🕐 {new Date(r.documented_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</>}
+                      </span>
+                    </div>
+                    {Array.isArray(r.photo_urls) && r.photo_urls.length > 0 && (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '6px 0 4px 26px' }}>
+                        {r.photo_urls.map((u, j) => (
+                          <a key={j} href={u} target="_blank" rel="noreferrer" title="Open full size">
+                            <img src={u} alt={`${r.name} photo ${j + 1}`} style={{ width: 76, height: 76, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)', display: 'block' }} />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
