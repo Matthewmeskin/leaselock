@@ -43,19 +43,10 @@ async function fetchGeoapify(input, signal) {
   return (data.suggestions || []).map(s => ({ ...s, text: (s.text || '').replace(/, United States of America$/, '') }))
 }
 
-// Resolve with the first non-empty result; empty only if every source is empty/failed.
-function firstNonEmpty(promises) {
-  return new Promise((resolve) => {
-    let pending = promises.length
-    for (const p of promises) {
-      p.then(r => {
-        if (Array.isArray(r) && r.length) resolve(r)
-        else if (--pending === 0) resolve([])
-      }).catch(() => {
-        if (--pending === 0) resolve([])
-      })
-    }
-  })
+// Float completed house-number addresses above bare streets.
+function rankByHouseNumber(list, input) {
+  if (!/^\d/.test((input || '').trim())) return list
+  return [...list].sort((a, b) => (/^\d/.test(b.text) ? 1 : 0) - (/^\d/.test(a.text) ? 1 : 0))
 }
 
 export default function AddressAutocomplete({ value, onChange, placeholder, className = 'wz-input' }) {
@@ -90,23 +81,35 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
     const controller = new AbortController()
     abortRef.current = controller
     setLoading(true); setOpen(true)
-    try {
-      let sugg = await firstNonEmpty([
-        fetchPhoton(input, controller.signal),
-        fetchGeoapify(input, controller.signal),
-      ])
+    // Geoapify is authoritative (best US address data); Photon is only a fast
+    // provisional fill while Geoapify is in flight. Geoapify replaces it on arrival.
+    const geoP = fetchGeoapify(input, controller.signal).catch(() => [])
+    const photonP = fetchPhoton(input, controller.signal).catch(() => [])
+    let settled = false
+
+    geoP.then(geo => {
       if (controller.signal.aborted) return
-      // If the user typed a house number, float completed addresses to the top.
-      if (/^\d/.test(input.trim())) {
-        sugg = [...sugg].sort((a, b) => (/^\d/.test(b.text) ? 1 : 0) - (/^\d/.test(a.text) ? 1 : 0))
+      if (geo.length) {
+        settled = true
+        cacheRef.current.set(key, geo)
+        setLoading(false)
+        apply(geo)
       }
-      cacheRef.current.set(key, sugg)
+    })
+
+    photonP.then(ph => {
+      if (controller.signal.aborted || settled) return
+      if (ph.length) { setLoading(false); apply(rankByHouseNumber(ph, input)) } // provisional
+    })
+
+    Promise.allSettled([geoP, photonP]).then(async () => {
+      if (controller.signal.aborted || settled) return
+      const ph = rankByHouseNumber(await photonP, input)
+      cacheRef.current.set(key, ph)
       setLoading(false)
-      apply(sugg)
-    } catch (e) {
-      if (e.name === 'AbortError') return
-      setLoading(false); setSuggestions([]); setOpen(false)
-    }
+      if (ph.length) apply(ph)
+      else { setSuggestions([]); setOpen(false) }
+    })
   }, [apply])
 
   function handleChange(e) {
