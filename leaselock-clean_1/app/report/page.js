@@ -140,7 +140,9 @@ export default function Report() {
       const p = await res.json()
       if (p?.found) {
         setProperty(p)
-        applyPropertyRooms(p)
+        // Apartment buildings report building-wide totals (e.g. 36 beds
+        // across 22 units) — only mirror rooms for single-unit records.
+        if (!(p.units > 1)) applyPropertyRooms(p)
         track('property_matched')
       }
     } catch { /* lookup is best-effort */ }
@@ -400,14 +402,23 @@ export default function Report() {
           {property && (
             <div style={{ marginTop: 8, background: 'var(--mint-soft)', border: '1px solid var(--line-strong)', borderRadius: 12, padding: '10px 14px', fontSize: 13.5, lineHeight: 1.5 }}>
               🏠 <b>Public record match:</b>{' '}
-              {[
-                property.bedrooms && `${property.bedrooms} bed`,
-                property.bathrooms && `${property.bathrooms} bath`,
-                property.sqft && `${Math.round(property.sqft).toLocaleString()} sqft`,
-                property.yearBuilt && `built ${property.yearBuilt}`,
-                property.use,
-              ].filter(Boolean).join(' · ')}
-              {(property.bedrooms > 1 || property.bathrooms > 1) && <> — we pre-selected the rooms below to match.</>}
+              {property.units > 1 ? (
+                [
+                  `${property.units}-unit building`,
+                  property.sqft && `${Math.round(property.sqft).toLocaleString()} sqft`,
+                  property.yearBuilt && `built ${property.yearBuilt}`,
+                  property.use,
+                ].filter(Boolean).join(' · ')
+              ) : (
+                [
+                  property.bedrooms && `${property.bedrooms} bed`,
+                  property.bathrooms && `${property.bathrooms} bath`,
+                  property.sqft && `${Math.round(property.sqft).toLocaleString()} sqft`,
+                  property.yearBuilt && `built ${property.yearBuilt}`,
+                  property.use,
+                ].filter(Boolean).join(' · ')
+              )}
+              {!(property.units > 1) && (property.bedrooms > 1 || property.bathrooms > 1) && <> — we pre-selected the rooms below to match.</>}
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>Source: {property.source} · saved with your report</div>
             </div>
           )}
