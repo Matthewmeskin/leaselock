@@ -4,6 +4,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Logo from '../components/Logo'
 import GeneratingLoader from '../components/GeneratingLoader'
+import AddressAutocomplete from '../components/AddressAutocomplete'
+import FakeDoor from '../components/FakeDoor'
+import { track } from '../lib/analytics'
 import { QUIZ_STEPS } from '../lib/quiz'
 import * as db from '../lib/db'
 
@@ -170,6 +173,8 @@ function Dashboard({ go, profile }) {
         <div className="tile"><div className="t-lab">Rent payments logged</div><div className="t-num">{rent.length}</div></div>
         <div className="tile"><div className="t-lab">Deposit protected</div><div className="t-num brand">{(cal.length || maint.length || rent.length) ? 'Yes' : '—'}</div></div>
       </div>
+
+      <FakeDoor placement="dashboard" />
 
       <div className="c">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -768,7 +773,7 @@ function RoommateAgreement({ go }) {
         </p>
 
         <div className="form-row">
-          <div><span className="lab">Address (optional)</span><input className="inp" placeholder="123 Main St, Apt 4B" value={data.address} onChange={e => patch({ address: e.target.value })} /></div>
+          <div><span className="lab">Address (optional)</span><AddressAutocomplete className="inp" placeholder="123 Main St, Apt 4B" value={data.address} onChange={v => patch({ address: v })} /></div>
           <div><span className="lab">Start date (optional)</span><input className="inp" type="date" value={data.startDate} onChange={e => patch({ startDate: e.target.value })} /></div>
         </div>
 
@@ -956,12 +961,16 @@ const DOC_ICONS = { lease: '📄', photo: '📸', file: '📎' }
 
 function Documents() {
   const [docs, setDocs] = useState([])
+  const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef()
 
   async function load() {
-    try { setDocs(await db.listDocuments()) } catch (e) { console.error(e) }
+    try {
+      const [d, r] = await Promise.all([db.listDocuments(), db.listMoveInReports()])
+      setDocs(d); setReports(r)
+    } catch (e) { console.error(e) }
     setLoading(false)
   }
   useEffect(() => { load() }, [])
@@ -1009,10 +1018,25 @@ function Documents() {
       </p>
       {loading ? (
         <p className="d">Loading…</p>
-      ) : docs.length === 0 ? (
+      ) : (docs.length === 0 && reports.length === 0) ? (
         <div className="empty"><div className="e-ic">📁</div>No documents yet. Upload a lease, receipts, or photos — or add them through Lease review and Move-in report.</div>
       ) : (
         <div>
+          {reports.map(r => (
+            <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 4px', borderBottom: '1px solid var(--line)', fontSize: 14 }}>
+              <span style={{ fontSize: 20 }}>📋</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  Move-in report{r.unit_address ? ` — ${r.unit_address}` : ''}
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+                  Locked {new Date(r.locked_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {r.landlord_signed_at ? ` · ✍️ signed by ${r.landlord_name}` : ' · awaiting landlord signature'}
+                </div>
+              </div>
+              <button className="bg2" onClick={() => window.open(`/sign/${r.token}`, '_blank', 'noopener')}>View</button>
+            </div>
+          ))}
           {docs.map(doc => (
             <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 4px', borderBottom: '1px solid var(--line)', fontSize: 14 }}>
               <span style={{ fontSize: 20 }}>{DOC_ICONS[doc.kind] || '📎'}</span>
@@ -1036,24 +1060,35 @@ function Documents() {
 
 /* ---------- App shell ---------- */
 // Messages tab removed
-const NAV = [
-  ['home', 'Dashboard', '◫'],
-  ['household', 'Lease & roommates', '🏠'],
-  ['lease', 'Lease review', '📄'],
-  ['movein', 'Move-in report', '📸'],
-  ['roommates', 'Roommate agreement', '🤝'],
-  ['calendar', 'Lease calendar', '📅'],
-  ['maint', 'Maintenance', '🔧'],
-  ['rent', 'Rent log', '💵'],
-  ['documents', 'Documents', '📁'],
+// Grouped by how often renters reach for each tool: daily protection first,
+// ongoing tracking second, household setup last.
+const NAV_GROUPS = [
+  ['', [
+    ['home', 'Dashboard', '◫'],
+  ]],
+  ['Protect', [
+    ['lease', 'Lease review', '📄'],
+    ['movein', 'Move-in report', '📸'],
+    ['documents', 'Documents', '📁'],
+  ]],
+  ['Track', [
+    ['calendar', 'Key dates', '📅'],
+    ['maint', 'Maintenance', '🔧'],
+    ['rent', 'Rent log', '💵'],
+  ]],
+  ['Household', [
+    ['household', 'Lease & roommates', '🏠'],
+    ['roommates', 'Roommate agreement', '🤝'],
+  ]],
 ]
+const NAV = NAV_GROUPS.flatMap(([, items]) => items)
 const TITLES = {
   home: 'Dashboard',
   household: 'Lease & roommates',
   lease: 'Lease review',
   movein: 'Move-in report',
   roommates: 'Roommate agreement',
-  calendar: 'Lease calendar',
+  calendar: 'Key dates',
   maint: 'Maintenance tracker',
   rent: 'Rent log',
   documents: 'Documents',
@@ -1126,7 +1161,12 @@ export default function App() {
       <aside className="ax-side">
         <Link href="/" className="ax-brand"><Logo size={30} /><span>Renter<span style={{ color: 'var(--brand)' }}>Ready</span></span></Link>
         <nav className="ax-nav">
-          {NAV.map(([k, l, i]) => <button key={k} className={`ax-link ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}><span className="ico">{i}</span>{l}</button>)}
+          {NAV_GROUPS.map(([group, items]) => (
+            <div key={group || 'main'}>
+              {group && <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '.08em', padding: '14px 12px 6px' }}>{group}</div>}
+              {items.map(([k, l, i]) => <button key={k} className={`ax-link ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}><span className="ico">{i}</span>{l}</button>)}
+            </div>
+          ))}
         </nav>
         <div className="foot">
           <button

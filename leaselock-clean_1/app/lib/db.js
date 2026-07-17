@@ -333,10 +333,13 @@ export async function saveMoveInReport({ unitAddress, tenantName, reportText, ro
   const supabase = createClient()
   const user = await getCurrentUser()
   if (!user) throw new Error('Not signed in')
+  let household_id = null
+  try { household_id = await activeHouseholdId() } catch { /* report still saves without household */ }
   const { data, error } = await supabase
     .from('shared_reports')
     .insert({
       created_by: user.id,
+      household_id,
       unit_address: unitAddress || null,
       tenant_name: tenantName || null,
       report_text: reportText,
@@ -346,6 +349,19 @@ export async function saveMoveInReport({ unitAddress, tenantName, reportText, ro
     .single()
   if (error) throw error
   return data
+}
+
+// All reports visible to this user (their own + household ones).
+export async function listMoveInReports() {
+  const supabase = createClient()
+  const user = await getCurrentUser()
+  if (!user) return []
+  const { data, error } = await supabase
+    .from('shared_reports')
+    .select('id, token, unit_address, tenant_name, locked_at, landlord_name, landlord_signed_at, created_by')
+    .order('locked_at', { ascending: false })
+  if (error) throw error
+  return data || []
 }
 
 export async function latestMoveInReport() {

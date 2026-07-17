@@ -97,10 +97,13 @@ function SignupsChart({ days }) {
 /* ---------- feature usage horizontal bars ---------- */
 const FEATURE_LABELS = {
   lease_reviews: 'AI lease reviews',
+  move_in_reports: 'Move-in reports locked',
+  signed_reports: 'Reports signed by landlord',
   calendar_events: 'Calendar events',
   maintenance_issues: 'Maintenance issues',
   rent_payments: 'Rent payments logged',
   roommate_agreements: 'Roommate agreements generated',
+  documents: 'Documents stored',
 }
 
 function FeatureBars({ features }) {
@@ -117,6 +120,74 @@ function FeatureBars({ features }) {
           <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)', textAlign: 'right' }}>{r.value}</div>
         </div>
       ))}
+    </div>
+  )
+}
+
+/* ---------- move-in funnel ---------- */
+const FUNNEL_STEPS = [
+  ['view', 'Opened /report'],
+  ['start', 'Started inspection'],
+  ['review', 'Reached review'],
+  ['generate', 'Clicked generate'],
+  ['locked', 'Locked report'],
+]
+
+function Funnel({ funnel }) {
+  const base = funnel?.view || 0
+  let prev = null
+  return (
+    <div>
+      {FUNNEL_STEPS.map(([key, label]) => {
+        const v = funnel?.[key] ?? 0
+        const ofBase = base ? Math.round((v / base) * 100) : 0
+        const drop = prev !== null && prev > 0 ? Math.round(((prev - v) / prev) * 100) : null
+        prev = v
+        return (
+          <div key={key} style={{ display: 'grid', gridTemplateColumns: '170px 1fr 150px', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 13.5 }}>{label}</div>
+            <div style={{ height: 16, background: 'var(--bg)', borderRadius: 8, overflow: 'hidden' }}>
+              <div style={{ width: `${base ? (v / base) * 100 : 0}%`, height: '100%', background: 'var(--brand)', borderRadius: 8, minWidth: v > 0 ? 8 : 0 }} />
+            </div>
+            <div style={{ fontSize: 12.5, textAlign: 'right', whiteSpace: 'nowrap' }}>
+              <b>{v}</b> · {ofBase}%
+              {drop !== null && drop > 0 && <span style={{ color: '#c0392b' }}> · −{drop}% drop</span>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ---------- A/B variants table ---------- */
+const VARIANT_LABELS = { deposit: 'Deposit-protection framing', comprehension: 'Lease-comprehension framing' }
+
+function VariantsTable({ variants }) {
+  if (!variants?.length) return <p style={{ fontSize: 13.5, color: 'var(--ink-soft)' }}>No variant data yet — it accrues as visitors hit the landing page.</p>
+  const rate = (n, d) => d ? `${Math.round((n / d) * 100)}%` : '—'
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+        <thead>
+          <tr style={{ textAlign: 'left', color: 'var(--ink-soft)', fontSize: 12 }}>
+            {['Variant', 'Landing views', 'CTA clicks (CTR)', 'Emails (conv.)', 'Signups (conv.)'].map(h => (
+              <th key={h} style={{ padding: '8px 10px', borderBottom: '1px solid var(--line)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.03em', whiteSpace: 'nowrap' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {variants.map(v => (
+            <tr key={v.variant}>
+              <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--line)', fontWeight: 600 }}>{VARIANT_LABELS[v.variant] || v.variant}</td>
+              <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--line)' }}>{v.landing_views}</td>
+              <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--line)' }}>{v.cta_clicks} ({rate(v.cta_clicks, v.landing_views)})</td>
+              <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--line)' }}>{v.email_captures} ({rate(v.email_captures, v.landing_views)})</td>
+              <td style={{ padding: '9px 10px', borderBottom: '1px solid var(--line)' }}>{v.signups} ({rate(v.signups, v.landing_views)})</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -210,6 +281,43 @@ export default function AdminPage() {
 
             <Card title="Feature usage" sub="Total records created across all users">
               <FeatureBars features={data.features} />
+            </Card>
+
+            <Card title="Move-in flow funnel" sub="Unique sessions per step, last 30 days — with drop-off between steps">
+              <Funnel funnel={data.analytics?.movein_funnel} />
+              <div style={{ display: 'flex', gap: 20, marginTop: 14, fontSize: 13.5, flexWrap: 'wrap' }}>
+                <span>⏱ Avg time to complete: <b>{data.analytics?.avg_completion_seconds
+                  ? `${Math.floor(data.analytics.avg_completion_seconds / 60)}m ${data.analytics.avg_completion_seconds % 60}s`
+                  : '—'}</b></span>
+              </div>
+            </Card>
+
+            <Card title="Experiments" sub="Fake-door pricing test, email capture, and the value-prop A/B test (last 30 days)">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 18 }}>
+                <Stat
+                  label="Fake-door clicks"
+                  value={Object.values(data.analytics?.fake_door || {}).reduce((a, b) => a + b, 0)}
+                  sub={Object.entries(data.analytics?.fake_door || {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'no clicks yet'}
+                />
+                <Stat label="Emails captured" value={data.analytics?.email_captures_total ?? 0} sub="landing page CTA" />
+                <Stat
+                  label="Reports signed"
+                  value={data.features?.signed_reports ?? 0}
+                  sub={`of ${data.features?.move_in_reports ?? 0} locked reports`}
+                />
+              </div>
+              <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 8px' }}>Value-prop A/B test</h3>
+              <VariantsTable variants={data.analytics?.variants} />
+              {(data.analytics?.recent_emails?.length ?? 0) > 0 && (
+                <>
+                  <h3 style={{ fontSize: 14, fontWeight: 700, margin: '18px 0 8px' }}>Captured emails (latest 25)</h3>
+                  <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.9 }}>
+                    {data.analytics.recent_emails.map((e, i) => (
+                      <div key={i}>{e.email} <span style={{ opacity: 0.7 }}>· {VARIANT_LABELS[e.variant] || e.variant || '—'} · {new Date(e.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div>
+                    ))}
+                  </div>
+                </>
+              )}
             </Card>
 
             <Card title="Users" sub={`${data.users.length} most recent (max 100)`}>

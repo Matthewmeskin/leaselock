@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import SiteNav from './_components/SiteNav'
 import Logo from './components/Logo'
+import HeroAB from './_components/HeroAB'
 
 export default function Landing() {
   return (
@@ -11,14 +12,7 @@ export default function Landing() {
         <div className="wrap hero-grid">
           <div>
             <span className="eyebrow eyebrow-dark">For renters who want to stay protected</span>
-            <h1>Move in ready. <span className="hl-dark">Move out clean.</span></h1>
-            <p className="hero-sub hero-sub-dark">
-              Set up your renter protection in five minutes. AI lease review, guided move-in inspection, roommate agreements, and the tools that keep your deposit safe from day one.
-            </p>
-            <div className="hero-cta">
-              <Link href="/app" className="btn btn-mint btn-lg">Set up your protection →</Link>
-              <a href="#how" className="btn btn-ghost-dark btn-lg">See how it works</a>
-            </div>
+            <HeroAB />
             <div className="trust-row trust-row-dark">
               <span><b>5 minutes</b> to set up. Protected for the full lease.</span>
               <span className="dot" />
