@@ -78,6 +78,7 @@ function GeneratingLoader() {
 
 export default function Report() {
   const [step, setStep] = useState('rooms') // rooms | room-detail | review | generating | locked
+  const [liveText, setLiveText] = useState('')
   const [roomIdx, setRoomIdx] = useState(0)
   const [roomData, setRoomData] = useState({})
   const [tenantName, setTenantName] = useState('')
@@ -191,6 +192,7 @@ export default function Report() {
 
   async function generate() {
     setStep('generating')
+    setLiveText('')
     const log = activeRooms.map(r => {
       const d = roomData[r.name]
       if (!d) return null
@@ -199,14 +201,32 @@ export default function Report() {
     }).filter(Boolean).join('\n')
     const allPhotos = Object.values(roomData).flatMap(r => r.photos)
     try {
-      const out = await callAPI(
-        'You are a renter protection assistant. Review the move-in photos and produce a professional, factual move-in condition report organized by room. Be specific about any damage, stains, or issues visible in the photos. Under 350 words. Plain text, no markdown.',
-        `Unit: ${unitAddress || 'Not provided'}\nTenant: ${tenantName || 'Not provided'}`
-        + (profileRows.length ? `\n\nTenant intake:\n${profileRows.map(r => `- ${r.question} ${r.answer}`).join('\n')}` : '')
-        + `\n\nRoom-by-room log:\n${log}\n\nReview photos and write the report:`,
-        allPhotos
-      )
-      setReportText(out)
+      const res = await fetch('/api/claude', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stream: true,
+          system: 'You are a renter protection assistant. Review the move-in photos and produce a professional, factual move-in condition report organized by room. Be specific about any damage, stains, or issues visible in the photos. Under 350 words. Plain text, no markdown.',
+          user: `Unit: ${unitAddress || 'Not provided'}\nTenant: ${tenantName || 'Not provided'}`
+            + (profileRows.length ? `\n\nTenant intake:\n${profileRows.map(r => `- ${r.question} ${r.answer}`).join('\n')}` : '')
+            + `\n\nRoom-by-room log:\n${log}\n\nReview photos and write the report:`,
+          images: allPhotos,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'API error')
+      }
+      const reader = res.body.getReader()
+      const dec = new TextDecoder()
+      let text = ''
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        text += dec.decode(value, { stream: true })
+        setLiveText(text)
+      }
+      if (!text.trim()) throw new Error('The AI returned an empty report. Please try again.')
+      setReportText(text)
       setLockTs(new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))
       setStep('locked')
     } catch (e) {
@@ -363,9 +383,14 @@ export default function Report() {
       </div>
 
       <div className="wz-nav">
+        {!(condGood || condIssues) && (
+          <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 }}>
+            Select a condition above to continue — or skip this room.
+          </div>
+        )}
         <div className="wz-nav-row">
           <button className="wz-back" onClick={prevRoom}>Back</button>
-          <button className="wz-next" onClick={nextRoom}>
+          <button className="wz-next" onClick={nextRoom} disabled={!(condGood || condIssues)}>
             {roomIdx < activeRooms.length - 1 ? `Next: ${activeRooms[roomIdx + 1].name} →` : 'Review report →'}
           </button>
         </div>
@@ -435,6 +460,16 @@ export default function Report() {
   if (step === 'generating') return (
     <div className="wz" style={{ alignItems: 'center', justifyContent: 'center' }}>
       <GeneratingLoader />
+      {liveText && (
+        <div style={{
+          maxWidth: 640, width: '100%', margin: '18px auto 40px', padding: '18px 22px',
+          background: '#fff', border: '1px solid var(--line)', borderRadius: 14,
+          fontSize: 14, lineHeight: 1.6, color: 'var(--ink)', whiteSpace: 'pre-wrap',
+        }}>
+          {liveText}
+          <span style={{ display: 'inline-block', width: 8, height: 16, background: 'var(--brand)', marginLeft: 2, verticalAlign: 'text-bottom', animation: 'gen-bounce 1s infinite' }} />
+        </div>
+      )}
     </div>
   )
 
