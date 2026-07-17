@@ -12,6 +12,8 @@ export default function SignReportPage() {
   const [name, setName] = useState('')
   const [signing, setSigning] = useState(false)
   const [error, setError] = useState('')
+  const [isRenter, setIsRenter] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
@@ -20,6 +22,11 @@ export default function SignReportPage() {
       setReport(data)
       setState('ready')
     })
+    // If RLS lets the signed-in visitor read this report directly, they're the
+    // tenant (or a roommate) — show the renter view instead of the signing form.
+    supabase.from('shared_reports').select('id').eq('token', token).maybeSingle()
+      .then(({ data }) => { if (data) setIsRenter(true) })
+      .catch(() => {})
   }, [token])
 
   async function sign(e) {
@@ -88,7 +95,25 @@ export default function SignReportPage() {
 
             <div style={{ background: '#fff', border: '1px solid var(--line)', borderRadius: 16, padding: '22px' }}>
               <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 17, margin: 0 }}>Landlord acknowledgement</h2>
-              {signed ? (
+              {isRenter && !signed ? (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 12, padding: '14px 16px', fontSize: 14.5, lineHeight: 1.55 }}>
+                    ⏳ <b>Awaiting your landlord&apos;s signature.</b> This is the shared page your landlord sees —
+                    send them this link and they can sign right here, no account needed.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                      style={{ padding: '11px 20px', borderRadius: 999, border: '1.5px solid var(--line-strong)', background: '#fff', color: 'var(--brand)', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+                    >
+                      {copied ? '✓ Copied' : 'Copy signing link'}
+                    </button>
+                    <Link href="/app?tab=movein" style={{ padding: '11px 20px', borderRadius: 999, border: '1.5px solid var(--line-strong)', color: 'var(--ink-soft)', fontWeight: 600, fontSize: 14, textDecoration: 'none' }}>
+                      ← Back to my reports
+                    </Link>
+                  </div>
+                </div>
+              ) : signed ? (
                 <div style={{ marginTop: 12, background: 'var(--mint-soft)', border: '1px solid var(--line-strong)', borderRadius: 12, padding: '14px 16px', fontSize: 15 }}>
                   ✍️ Signed by <b>{report.landlord_name}</b> on {new Date(report.landlord_signed_at).toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}.
                 </div>
