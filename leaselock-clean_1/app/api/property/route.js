@@ -10,6 +10,15 @@ const DETAIL = 'https://portal.assessor.lacounty.gov/api/parceldetail?ain='
 // Strip directions + street-type suffixes so "W 30th St" matches "30TH".
 const NOISE = /\b(STREET|ST|AVENUE|AVE|BOULEVARD|BLVD|DRIVE|DR|ROAD|RD|LANE|LN|COURT|CT|PLACE|PL|WAY|TERRACE|TER|CIRCLE|CIR|PARKWAY|PKWY|HIGHWAY|HWY|NORTH|SOUTH|EAST|WEST|N|S|E|W)\b/g
 
+// Drop unit designators ("Apt 4B", "Unit C", "#12", "No 3") — renters type
+// them, but the assessor keys parcels by the base street address.
+const stripUnit = (s) => s
+  .replace(/\b(apt|apartment|unit|ste|suite)\.?\s*[\w-]+\b/gi, ' ')
+  .replace(/\bno\.?\s*\d+\b/gi, ' ')
+  .replace(/#\s*[\w-]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+
 function coreStreet(s) {
   return (s || '').toUpperCase().replace(NOISE, ' ').replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
 }
@@ -66,7 +75,7 @@ export async function GET(req) {
   // Address suggestions straight from the assessor roll (keyless, LA County).
   // Every suggestion is a real parcel, so picking one guarantees a record match.
   if (searchParams.get('suggest') != null) {
-    const s = (searchParams.get('suggest') || '').replace(/,/g, ' ').replace(/\s+/g, ' ').trim()
+    const s = stripUnit((searchParams.get('suggest') || '').replace(/,/g, ' ')).trim()
     if (s.length < 3) return Response.json({ suggestions: [] })
     try {
       const data = await fetchJson(SEARCH + encodeURIComponent(s))
@@ -120,7 +129,7 @@ export async function GET(req) {
     }
   }
 
-  const q = (searchParams.get('q') || '').trim()
+  const q = stripUnit((searchParams.get('q') || '').trim())
   const m = q.match(/^(\d+)\s+([^,]+)/)
   if (!m) return Response.json({ found: false })
   const houseNo = m[1]

@@ -139,6 +139,10 @@ export default function Report() {
       const res = await fetch(`/api/property?${qs}`)
       const p = await res.json()
       if (p?.found) {
+        // Remember "1234 MAIN" so appending "Apt 4B" keeps the card while
+        // typing a different address clears it.
+        const base = (typeof sel === 'object' ? sel?.text : String(sel || '')) || ''
+        p.baseKey = base.split(',')[0].trim().toUpperCase().split(/\s+/).slice(0, 2).join(' ')
         setProperty(p)
         // Apartment buildings report building-wide totals (e.g. 36 beds
         // across 22 units) — only mirror rooms for single-unit records.
@@ -395,8 +399,16 @@ export default function Report() {
         <p className="wz-p">We'll go room by room. Take photos, note any existing issues, and our AI writes the condition report. Takes about 5 minutes.</p>
         <div className="wz-field">
           <label>Unit address</label>
-          <AddressAutocomplete value={unitAddress} onChange={setUnitAddress} onSelect={lookupProperty} placeholder="123 Main St, Apt 4B" />
-          {propLoading && (
+          <AddressAutocomplete
+            value={unitAddress}
+            onChange={(v) => {
+              setUnitAddress(v)
+              // Appending "Apt 4B" keeps the record card; changing the base address clears it.
+              if (property && !(property.baseKey && v.toUpperCase().includes(property.baseKey))) setProperty(null)
+            }}
+            onSelect={lookupProperty}
+            placeholder="123 Main St, Apt 4B"
+          />          {propLoading && (
             <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>Checking public property records…</div>
           )}
           {property && (
@@ -419,6 +431,7 @@ export default function Report() {
                 ].filter(Boolean).join(' · ')
               )}
               {!(property.units > 1) && (property.bedrooms > 1 || property.bathrooms > 1) && <> — we pre-selected the rooms below to match.</>}
+              {property.units > 1 && <> — add your unit to the address above (e.g. &ldquo;, Apt 3&rdquo;).</>}
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>Source: {property.source} · saved with your report</div>
             </div>
           )}
