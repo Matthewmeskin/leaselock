@@ -1197,9 +1197,16 @@ function AppShell() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-soft)', fontSize: 15 }}>
-        <style>{`@keyframes ll-spin{to{transform:rotate(360deg)}}`}</style>
-        Loading your dashboard…
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+        <GeneratingLoader
+          title="Opening your dashboard"
+          msgs={[
+            'Unlocking your protection suite',
+            'Fetching your lease and roommates',
+            'Rounding up your key dates',
+            'Checking on your deposit',
+          ]}
+        />
       </div>
     )
   }

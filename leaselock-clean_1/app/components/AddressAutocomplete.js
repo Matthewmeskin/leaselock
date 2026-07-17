@@ -1,9 +1,56 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 
-// Call Geoapify directly from the browser when a public key is available (fastest:
-// no proxy hop). Falls back to the /api/places server route if the public key isn't set.
+// Two geocoders race in parallel and the fastest non-empty answer wins:
+// Photon (komoot, free, no key) and Geoapify (direct from the browser when a
+// public key is set, otherwise via the /api/places proxy).
 const GEO_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_API_KEY
+
+async function fetchPhoton(input, signal) {
+  const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(input)}&limit=8&lang=en`, { signal })
+  const data = await res.json()
+  const seen = new Set()
+  const out = []
+  for (const f of data.features || []) {
+    const p = f.properties || {}
+    if (p.countrycode && p.countrycode !== 'US') continue
+    const line1 = [p.housenumber, p.street].filter(Boolean).join(' ') || p.name
+    if (!line1) continue
+    const text = [line1, p.city || p.county, [p.state, p.postcode].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+    if (seen.has(text)) continue
+    seen.add(text)
+    out.push({ placeId: `ph-${p.osm_id || text}`, text })
+    if (out.length >= 6) break
+  }
+  return out
+}
+
+async function fetchGeoapify(input, signal) {
+  if (GEO_KEY) {
+    const url = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(input)}&format=json&filter=countrycode:us&limit=6&apiKey=${GEO_KEY}`
+    const res = await fetch(url, { signal })
+    const data = await res.json()
+    return (data.results || []).map(r => ({ placeId: r.place_id, text: r.formatted }))
+  }
+  const res = await fetch(`/api/places?q=${encodeURIComponent(input)}`, { signal })
+  const data = await res.json()
+  return data.suggestions || []
+}
+
+// Resolve with the first non-empty result; empty only if every source is empty/failed.
+function firstNonEmpty(promises) {
+  return new Promise((resolve) => {
+    let pending = promises.length
+    for (const p of promises) {
+      p.then(r => {
+        if (Array.isArray(r) && r.length) resolve(r)
+        else if (--pending === 0) resolve([])
+      }).catch(() => {
+        if (--pending === 0) resolve([])
+      })
+    }
+  })
+}
 
 export default function AddressAutocomplete({ value, onChange, placeholder, className = 'wz-input' }) {
   const [suggestions, setSuggestions] = useState([])
@@ -38,19 +85,11 @@ export default function AddressAutocomplete({ value, onChange, placeholder, clas
     abortRef.current = controller
     setLoading(true); setOpen(true)
     try {
-      let sugg
-      if (GEO_KEY) {
-        const url = `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(input)}&format=json&filter=countrycode:us&limit=6&apiKey=${GEO_KEY}`
-        const res = await fetch(url, { signal: controller.signal })
-        const data = await res.json()
-        sugg = (data.results || []).map(r => ({ placeId: r.place_id, text: r.formatted }))
-      } else {
-        const res = await fetch(`/api/places?q=${encodeURIComponent(input)}`, {
-          signal: controller.signal,
-        })
-        const data = await res.json()
-        sugg = data.suggestions || []
-      }
+      const sugg = await firstNonEmpty([
+        fetchPhoton(input, controller.signal),
+        fetchGeoapify(input, controller.signal),
+      ])
+      if (controller.signal.aborted) return
       cacheRef.current.set(key, sugg)
       setLoading(false)
       apply(sugg)
