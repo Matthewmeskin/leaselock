@@ -1,9 +1,10 @@
 'use client'
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Logo from '../components/Logo'
 import { createClient } from '../lib/supabase/client'
+import { track } from '../lib/analytics'
 
 const inputStyle = {
   width: '100%', padding: '12px 14px', borderRadius: 12,
@@ -52,10 +53,13 @@ function SignupInner() {
   const [error, setError] = useState('')
   const [resent, setResent] = useState(false)
 
+  useEffect(() => { track('signup_view') }, [])
+
   function nextFromName(e) {
     e.preventDefault()
     if (name.trim().length < 2) { setError('Please enter your name.'); return }
     setError('')
+    track('signup_name')
     setStep(2)
   }
 
@@ -88,6 +92,7 @@ function SignupInner() {
       setLoading(false)
       return
     }
+    track('signup_created')
     if (data.session) {
       // Email confirmation is off — straight into the app (personalization quiz).
       router.push(redirect)

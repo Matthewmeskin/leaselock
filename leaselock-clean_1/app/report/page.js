@@ -4,6 +4,8 @@ import Link from 'next/link'
 import AddressAutocomplete from '../components/AddressAutocomplete'
 import Logo from '../components/Logo'
 import GeneratingLoader from '../components/GeneratingLoader'
+import FakeDoor from '../components/FakeDoor'
+import { track } from '../lib/analytics'
 import { profileToReadable } from '../lib/quiz'
 import { getProfile, saveMoveInReport, latestMoveInReport, refreshMoveInReport, updateMoveInReportText, uploadDocument, dataUrlToBlob } from '../lib/db'
 
@@ -71,8 +73,10 @@ export default function Report() {
   const [reportText, setReportText] = useState('')
   const [editingReport, setEditingReport] = useState(false)
   const [lockTs, setLockTs] = useState('')
+  const flowStart = useRef(null)
   const [profile, setProfile] = useState(null)
   useEffect(() => {
+    track('movein_view')
     getProfile().then(p => { if (p) setProfile(p) }).catch(() => {})
     // Restore the most recent locked report so it survives refreshes.
     latestMoveInReport().then(r => {
@@ -178,11 +182,11 @@ export default function Report() {
 
   function nextRoom() {
     if (roomIdx < activeRooms.length - 1) { setRoomIdx(i => i + 1) }
-    else { setStep('review') }
+    else { track('movein_review'); setStep('review') }
   }
   function skipRoom() {
     if (roomIdx < activeRooms.length - 1) setRoomIdx(i => i + 1)
-    else setStep('review')
+    else { track('movein_review'); setStep('review') }
   }
   function prevRoom() {
     if (roomIdx > 0) setRoomIdx(i => i - 1)
@@ -192,6 +196,7 @@ export default function Report() {
   function totalPhotos() { return Object.values(roomData).reduce((n, r) => n + r.photos.length, 0) }
 
   async function generate() {
+    track('movein_generate')
     setStep('generating')
     setLiveText('')
     const log = activeRooms.map(r => {
@@ -245,6 +250,7 @@ export default function Report() {
       } catch (err) {
         console.error('Could not save report', err)
       }
+      track('movein_locked', flowStart.current ? { seconds: Math.round((Date.now() - flowStart.current) / 1000) } : {})
       setStep('locked')
     } catch (e) {
       alert(`Report generation failed: ${e.message || 'Unknown error'}`)
@@ -315,7 +321,7 @@ export default function Report() {
       </div>
       <div className="wz-nav">
         <div className="wz-nav-row">
-          <button className="wz-next" onClick={() => { setRoomIdx(0); setStep('room-detail') }} disabled={(!unitAddress && !tenantName) || selected.length === 0}>
+          <button className="wz-next" onClick={() => { track('movein_start'); flowStart.current = Date.now(); setRoomIdx(0); setStep('room-detail') }} disabled={(!unitAddress && !tenantName) || selected.length === 0}>
             Start inspection →
           </button>
         </div>
@@ -599,6 +605,8 @@ export default function Report() {
               )}
             </div>
           )}
+
+          <FakeDoor placement="report_locked" />
 
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }} className="no-print">
             <button className="bp" onClick={() => { setEditingReport(false); setTimeout(() => window.print(), 60) }}>Print / save as PDF</button>
