@@ -432,6 +432,12 @@ export default function Report() {
               )}
               {!(property.units > 1) && (property.bedrooms > 1 || property.bathrooms > 1) && <> — we pre-selected the rooms below to match.</>}
               {property.units > 1 && <> — add your unit to the address above (e.g. &ldquo;, Apt 3&rdquo;).</>}
+              {property.units > 1 && (
+                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>
+                  ℹ️ County records cover the whole building — individual units aren&apos;t in public records, so
+                  pick the rooms in <b>your</b> unit below.
+                </div>
+              )}
               <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 2 }}>Source: {property.source} · saved with your report</div>
             </div>
           )}
