@@ -70,10 +70,25 @@ export async function GET(req) {
     if (s.length < 3) return Response.json({ suggestions: [] })
     try {
       const data = await fetchJson(SEARCH + encodeURIComponent(s))
+      // The portal matches loosely (house number alone pulls in every street),
+      // so re-rank locally: typed street prefix first, then typed house number.
+      const sm = s.match(/^(\d+)\s+(.*)$/)
+      const typedNo = sm ? sm[1] : null
+      const typedStreet = coreStreet(sm ? sm[2] : s)
+      const scored = (data?.Parcels || []).filter(p => p.SitusStreet && p.AIN).map(p => {
+        const street = coreStreet(String(p.SitusStreet).replace(/^\d+\s*/, ''))
+        const streetScore = typedStreet && street.startsWith(typedStreet) ? 2
+          : typedStreet && street.includes(typedStreet) ? 1 : 0
+        const houseScore = typedNo && String(p.SitusStreet).startsWith(typedNo + ' ') ? 4 : 0
+        return { p, score: houseScore + streetScore, streetScore }
+      })
+      const anyStreetHit = typedStreet && scored.some(x => x.streetScore > 0)
+      const ranked = scored
+        .filter(x => !anyStreetHit || x.streetScore > 0)
+        .sort((a, b) => b.score - a.score)
       const seen = new Set()
       const out = []
-      for (const p of data?.Parcels || []) {
-        if (!p.SitusStreet || !p.AIN) continue
+      for (const { p } of ranked) {
         const text = fmtSitus(p)
         if (seen.has(text)) continue
         seen.add(text)
@@ -116,14 +131,17 @@ export async function GET(req) {
   try {
     const data = await fetchJson(SEARCH + encodeURIComponent([parts[0], parts[1]].filter(Boolean).join(' ')))
     const list = data?.Parcels || []
-    const hit = list.find(p => {
+    const candidates = list.filter(p => {
       const s = (p.SitusStreet || '').toUpperCase()
       if (!s.startsWith(houseNo + ' ')) return false
-      if (zip && p.SitusZipCode && !String(p.SitusZipCode).startsWith(zip)) return false
       const c = coreStreet(s.slice(houseNo.length))
       return c && streetCore && (c === streetCore || c.includes(streetCore) || streetCore.includes(c))
-    }) || list.find(p => (p.SitusStreet || '').toUpperCase().startsWith(houseNo + ' ') &&
-      coreStreet((p.SitusStreet || '').slice(houseNo.length)).includes(streetCore))
+    })
+    // Same street name can exist in several LA neighborhoods — trust the zip.
+    const hit = (zip && candidates.find(p => String(p.SitusZipCode || '').startsWith(zip)))
+      || (zip ? candidates.find(p => !p.SitusZipCode) : candidates[0])
+      || (!zip && candidates[0])
+      || null
     if (!hit?.AIN) return Response.json({ found: false })
 
     const detailRaw = await fetchJson(DETAIL + hit.AIN)
