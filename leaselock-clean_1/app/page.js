@@ -237,7 +237,7 @@ export default function Landing() {
               <p>Lease review. Move-in proof. Deposit protection. All in one place.</p>
             </div>
             <div className="footer-cols">
-              <div className="footer-col"><h5>Product</h5><Link href="/app">Move-in inspection</Link><a href="#pricing">Pricing</a><Link href="/login">Login / Sign up</Link></div>
+              <div className="footer-col"><h5>Product</h5><Link href="/app">Move-in inspection</Link><a href="#pricing">Pricing</a><Link href="/signup">Sign up</Link><Link href="/login">Log in</Link></div>
               <div className="footer-col"><h5>Resources</h5><Link href="/tools/deposit-calculator">Deposit deadline calculator</Link><Link href="/guides">Renter guides</Link></div>
             </div>
           </div>

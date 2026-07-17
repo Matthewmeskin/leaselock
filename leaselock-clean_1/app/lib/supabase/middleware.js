@@ -67,8 +67,8 @@ export async function updateSession(request) {
     return NextResponse.redirect(url)
   }
 
-  // If a signed-in user hits the login page, send them to the app.
-  if (user && pathname === '/login') {
+  // If a signed-in user hits the login/signup pages, send them to the app.
+  if (user && (pathname === '/login' || pathname === '/signup')) {
     const url = request.nextUrl.clone()
     url.pathname = '/app'
     url.search = ''
