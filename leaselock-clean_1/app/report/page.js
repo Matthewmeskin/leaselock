@@ -128,11 +128,24 @@ export default function Report() {
     setRoomData(d => ({ ...d, [room.name]: { ...current, ...patch } }))
   }
 
-  async function onFiles(e) {
-    const files = Array.from(e.target.files || []).slice(0, 8)
+  const [dragOver, setDragOver] = useState(false)
+
+  async function addPhotoFiles(fileList) {
+    const files = Array.from(fileList || []).filter(f => f.type.startsWith('image/')).slice(0, 8)
+    if (!files.length) return
     const scaled = await Promise.all(files.map(f => downscale(f)))
     updateRoom({ photos: [...current.photos, ...scaled].slice(0, 8) })
+  }
+
+  async function onFiles(e) {
+    await addPhotoFiles(e.target.files)
     e.target.value = ''
+  }
+
+  function onDrop(e) {
+    e.preventDefault()
+    setDragOver(false)
+    addPhotoFiles(e.dataTransfer?.files)
   }
 
   function removePhoto(i) {
@@ -196,8 +209,8 @@ export default function Report() {
       setReportText(out)
       setLockTs(new Date().toLocaleString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }))
       setStep('locked')
-    } catch {
-      setReportText('Something went wrong. Please try again.')
+    } catch (e) {
+      alert(`Report generation failed: ${e.message || 'Unknown error'}`)
       setStep('review')
     }
   }
@@ -292,9 +305,20 @@ export default function Report() {
 
         <div className="wz-field">
           <label>Photos</label>
-          <div style={{ background: 'var(--paper)', border: '1.5px dashed var(--line-strong)', borderRadius: 14, padding: 20, textAlign: 'center', cursor: 'pointer', marginBottom: 10 }} onClick={() => fileRef.current?.click()}>
+          <div
+            style={{
+              background: dragOver ? 'var(--mint-soft)' : 'var(--paper)',
+              border: dragOver ? '1.5px dashed var(--brand)' : '1.5px dashed var(--line-strong)',
+              borderRadius: 14, padding: 20, textAlign: 'center', cursor: 'pointer', marginBottom: 10,
+            }}
+            onClick={() => fileRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+          >
             <div style={{ fontSize: 26 }}>📸</div>
-            <div style={{ fontSize: 14, fontWeight: 600, marginTop: 6 }}>Tap to add photos</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginTop: 6 }}>{dragOver ? 'Drop photos here' : 'Tap to add photos — or drag & drop'}</div>
             <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 2 }}>Focus on: {room.prompts.slice(0, 3).join(' · ')}</div>
           </div>
           <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />

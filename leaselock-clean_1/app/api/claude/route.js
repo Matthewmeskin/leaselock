@@ -12,6 +12,27 @@ function getClient() {
   return new Anthropic({ apiKey })
 }
 
+// Map Anthropic SDK errors to messages a user (or the Vercel log) can act on.
+function friendlyError(e) {
+  if (e instanceof Anthropic.AuthenticationError) {
+    return { status: 503, message: 'The Anthropic API key is invalid or revoked. Update ANTHROPIC_API_KEY in Vercel and redeploy.' }
+  }
+  if (e instanceof Anthropic.NotFoundError) {
+    return { status: 503, message: `Model "${MODEL}" was not found. Check the ANTHROPIC_MODEL env var in Vercel (or remove it to use the default).` }
+  }
+  if (e instanceof Anthropic.RateLimitError) {
+    return { status: 429, message: 'The AI service is receiving too many requests right now. Wait a minute and try again.' }
+  }
+  if (e instanceof Anthropic.BadRequestError) {
+    return { status: 400, message: `The AI request was rejected: ${e.message}` }
+  }
+  if (e instanceof Anthropic.APIConnectionError) {
+    return { status: 503, message: 'Could not reach the AI service. Try again shortly.' }
+  }
+  const message = e?.message || 'AI request failed'
+  return { status: message.includes('ANTHROPIC_API_KEY') ? 503 : 500, message }
+}
+
 export async function POST(req) {
   try {
     const client = getClient()
@@ -31,14 +52,15 @@ export async function POST(req) {
     content.push({ type: 'text', text: user })
     const msg = await client.messages.create({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: 2048,
       system,
       messages: [{ role: 'user', content }],
     })
     return Response.json({ text: msg.content[0].text })
   } catch (e) {
-    const message = e?.message || 'AI request failed'
-    const status = message.includes('ANTHROPIC_API_KEY') ? 503 : 500
+    // Log the real failure so it shows up in Vercel's runtime logs.
+    console.error('Claude API error:', e?.status || '', e?.name || '', e?.message)
+    const { status, message } = friendlyError(e)
     return Response.json({ error: message }, { status })
   }
 }

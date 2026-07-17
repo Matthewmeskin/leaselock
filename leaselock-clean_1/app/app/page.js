@@ -267,13 +267,19 @@ function LeaseReview({ profile }) {
     }).catch(() => {})
   }, [])
 
-  function onPdf(e) {
-    const f = e.target.files?.[0]
+  const [pdfDragOver, setPdfDragOver] = useState(false)
+
+  function loadPdf(f) {
     if (!f) return
-    if (f.size > 4 * 1024 * 1024) { setRaw('That PDF is over 4MB. Try a smaller file or paste the text instead.'); e.target.value = ''; return }
+    if (f.type !== 'application/pdf') { setRaw('That file is not a PDF. Drop a .pdf file or paste the lease text instead.'); return }
+    if (f.size > 4 * 1024 * 1024) { setRaw('That PDF is over 4MB. Try a smaller file or paste the text instead.'); return }
     const r = new FileReader()
     r.onload = () => { setPdfData(r.result); setPdfName(f.name); setRaw('') }
     r.readAsDataURL(f)
+  }
+
+  function onPdf(e) {
+    loadPdf(e.target.files?.[0])
     e.target.value = ''
   }
 
@@ -322,7 +328,15 @@ function LeaseReview({ profile }) {
         <h2>AI lease risk review</h2>
         <p className="d">Paste your lease. We score how renter friendly it is, flag the clauses that cost you money, and hand you the questions to ask before signing.</p>
         <span className="lab">Lease document</span>
-        <div className="lease-upload" onClick={() => fileRef.current?.click()}>
+        <div
+          className="lease-upload"
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setPdfDragOver(true) }}
+          onDragEnter={(e) => { e.preventDefault(); setPdfDragOver(true) }}
+          onDragLeave={() => setPdfDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setPdfDragOver(false); loadPdf(e.dataTransfer?.files?.[0]) }}
+          style={pdfDragOver ? { borderColor: 'var(--brand)', background: 'var(--mint-soft)' } : undefined}
+        >
           {pdfName ? (
             <div className="lease-file">
               <span className="lf-ico">📄</span>
@@ -333,7 +347,7 @@ function LeaseReview({ profile }) {
             <>
               <div style={{ fontSize: 24 }}>📄</div>
               <div style={{ fontWeight: 600, marginTop: 6 }}>Upload lease PDF</div>
-              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 2 }}>Tap to choose a PDF file</div>
+              <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 2 }}>Tap to choose a PDF — or drag &amp; drop it here</div>
             </>
           )}
         </div>
@@ -401,10 +415,18 @@ function MoveIn({ profile }) {
   const [report, setReport] = useState('')
   const [loading, setLoading] = useState(false)
   const fileRef = useRef()
-  async function onFiles(e) {
-    const files = Array.from(e.target.files || []).slice(0, 6)
+  const [dragOver, setDragOver] = useState(false)
+
+  async function addPhotoFiles(fileList) {
+    const files = Array.from(fileList || []).filter(f => f.type.startsWith('image/')).slice(0, 6)
+    if (!files.length) return
     const c = await Promise.all(files.map(f => downscale(f)))
     setPhotos(p => [...p, ...c].slice(0, 6))
+  }
+
+  async function onFiles(e) {
+    await addPhotoFiles(e.target.files)
+    e.target.value = ''
   }
   function add() {
     if (!cond) { alert('Pick a condition first.'); return }
@@ -452,9 +474,16 @@ function MoveIn({ profile }) {
           <button style={cb('poor', '#c0392b')} onClick={() => setCond('poor')}>Poor</button>
         </div>
         <span className="lab">Photos</span>
-        <div onClick={() => fileRef.current?.click()} style={{ border: '1.5px dashed var(--line-strong)', borderRadius: 14, padding: 22, textAlign: 'center', cursor: 'pointer', background: '#fbfdfc', marginBottom: photos.length ? 12 : 20 }}>
+        <div
+          onClick={() => fileRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); addPhotoFiles(e.dataTransfer?.files) }}
+          style={{ border: dragOver ? '1.5px dashed var(--brand)' : '1.5px dashed var(--line-strong)', borderRadius: 14, padding: 22, textAlign: 'center', cursor: 'pointer', background: dragOver ? 'var(--mint-soft)' : '#fbfdfc', marginBottom: photos.length ? 12 : 20 }}
+        >
           <div style={{ fontSize: 26 }}>📸</div>
-          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>Tap to add photos</div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>{dragOver ? 'Drop photos here' : 'Tap to add photos — or drag & drop'}</div>
           <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 2 }}>Up to 6 per room · AI reads each one</div>
         </div>
         <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
