@@ -8,8 +8,15 @@ export default function SiteNav() {
   // null = unknown (render logged-out buttons until we know)
   const [authed, setAuthed] = useState(null)
   useEffect(() => {
-    createClient().auth.getSession()
-      .then(({ data }) => setAuthed(!!data?.session))
+    const supabase = createClient()
+    // Implicit-flow email links can land on the root with tokens in the URL
+    // hash — let the client store the session, then finish in the dashboard.
+    const fromEmailLink = /access_token|type=signup|type=magiclink/.test(window.location.hash)
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        setAuthed(!!data?.session)
+        if (fromEmailLink) window.location.replace('/app')
+      })
       .catch(() => setAuthed(false))
   }, [])
 

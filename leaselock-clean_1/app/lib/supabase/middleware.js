@@ -7,6 +7,19 @@ const PROTECTED_PREFIXES = ['/app', '/report']
 export async function updateSession(request) {
   let supabaseResponse = NextResponse.next({ request })
 
+  // Supabase email links fall back to the site root when the redirect URL
+  // isn't allowlisted — forward them to the auth callback so a first login
+  // lands in the dashboard instead of on the marketing page.
+  if (
+    request.nextUrl.pathname === '/' &&
+    (request.nextUrl.searchParams.has('code') || request.nextUrl.searchParams.has('token_hash'))
+  ) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth/callback'
+    if (!url.searchParams.has('redirect')) url.searchParams.set('redirect', '/app')
+    return NextResponse.redirect(url)
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
