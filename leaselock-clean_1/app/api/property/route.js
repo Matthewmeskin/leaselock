@@ -1,30 +1,38 @@
-// Free property-record lookup backed by the LA County Assessor's open
-// dataset on Socrata (no API key, no request cap for reasonable use).
-// Returns beds / baths / sqft / year built / use type for an address.
+// Free property-record lookup backed by the LA County Assessor's public
+// portal API (no key required). Returns beds / baths / sqft / year built /
+// use type for an address inside LA County; { found: false } elsewhere.
 export const runtime = 'edge'
 
-const DATASET = 'https://data.lacounty.gov/resource/9trm-uz8i.json'
+const API = 'https://portal.assessor.lacounty.gov/api/search?search='
 
-// Strip directions + street-type suffixes so "W 30th St" matches "30TH".
-const NOISE = /\b(STREET|ST|AVENUE|AVE|BOULEVARD|BLVD|DRIVE|DR|ROAD|RD|LANE|LN|COURT|CT|PLACE|PL|WAY|TERRACE|TER|CIRCLE|CIR|PARKWAY|PKWY|HIGHWAY|HWY|NORTH|SOUTH|EAST|WEST|N|S|E|W)\b/g
-
-function coreStreet(s) {
-  return (s || '').toUpperCase().replace(NOISE, ' ').replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+// Case-insensitive field grab that tolerates naming drift in the API.
+function pick(obj, names) {
+  if (!obj) return null
+  const keys = Object.keys(obj)
+  for (const n of names) {
+    const k = keys.find(k => k.toLowerCase() === n.toLowerCase())
+    if (k != null && obj[k] !== '' && obj[k] != null) return obj[k]
+  }
+  return null
 }
 
 const num = (v) => {
-  const n = parseFloat(v)
+  const n = parseFloat(String(v).replace(/,/g, ''))
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url)
 
-  // Field-discovery probe: return one raw dataset row.
+  // Raw response probe for field discovery: /api/property?probe=<address>
   if (searchParams.get('probe')) {
     try {
-      const r = await fetch(`${DATASET}?$limit=1`, { signal: AbortSignal.timeout(8000) })
-      return new Response(await r.text(), { status: r.status, headers: { 'Content-Type': 'application/json' } })
+      const r = await fetch(API + encodeURIComponent(searchParams.get('probe')), {
+        signal: AbortSignal.timeout(8000),
+        headers: { Accept: 'application/json' },
+      })
+      const body = await r.text()
+      return new Response(body.slice(0, 20000), { status: r.status, headers: { 'Content-Type': 'application/json' } })
     } catch (e) {
       return Response.json({ probeError: String(e?.message || e) }, { status: 502 })
     }
@@ -33,40 +41,33 @@ export async function GET(req) {
   const q = (searchParams.get('q') || '').trim()
   const m = q.match(/^(\d+)\s+([^,]+)/)
   if (!m) return Response.json({ found: false })
-  const houseNo = m[1]
-  const street = coreStreet(m[2])
+  // The portal matches best on "NUMBER STREET CITY" without state/zip noise.
   const parts = q.split(',').map(s => s.trim())
-  const city = (parts[1] || '').toUpperCase().replace(/[^A-Z ]/g, '').trim()
-  const zip = ((q.match(/\b\d{5}\b/g) || []).filter(z => z !== houseNo).pop()) || null
+  const search = [parts[0], parts[1]].filter(Boolean).join(' ')
 
-  let where = `situshouseno='${houseNo}'`
-  if (zip) where += ` and situszip like '${zip}%'`
-  else if (city) where += ` and upper(situscity) like '%${city.replace(/'/g, "''")}%'`
-
-  const url = `${DATASET}?$where=${encodeURIComponent(where)}&$order=rollyear DESC&$limit=50`
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) })
-    if (!res.ok) return Response.json({ found: false, error: `dataset ${res.status}` })
-    const rows = await res.json()
-    if (searchParams.get('debug')) return Response.json({ where, count: rows.length, rows: rows.slice(0, 3) })
-
-    // Newest roll year first; take the row whose street matches what was typed.
-    const hit = rows.find(r => {
-      const rc = coreStreet(r.situsstreet)
-      return rc && street && (rc === street || rc.includes(street) || street.includes(rc))
-    }) || (rows.length === 1 ? rows[0] : null)
+    const res = await fetch(API + encodeURIComponent(search), {
+      signal: AbortSignal.timeout(8000),
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok) return Response.json({ found: false, error: `assessor ${res.status}` })
+    const data = await res.json()
+    const list = Array.isArray(data) ? data
+      : pick(data, ['Parcels', 'parcels', 'results', 'items', 'data']) || []
+    if (searchParams.get('debug')) return Response.json({ search, count: list.length, first: list[0] || null })
+    const hit = list[0]
     if (!hit) return Response.json({ found: false })
 
     return Response.json({
       found: true,
-      apn: hit.ain || null,
-      yearBuilt: num(hit.yearbuilt),
-      sqft: num(hit.sqftmain),
-      bedrooms: num(hit.bedrooms),
-      bathrooms: num(hit.bathrooms),
-      units: num(hit.units),
-      use: hit.usedescription || hit.usetype || null,
-      rollYear: hit.rollyear || null,
+      apn: pick(hit, ['AIN', 'ain', 'APN', 'ParcelNumber']),
+      yearBuilt: num(pick(hit, ['YearBuilt', 'EffectiveYearBuilt', 'yearbuilt'])),
+      sqft: num(pick(hit, ['SqftMain', 'SQFTmain', 'BuildingSqft', 'sqft'])),
+      bedrooms: num(pick(hit, ['Bedrooms', 'NumOfBeds', 'bedrooms'])),
+      bathrooms: num(pick(hit, ['Bathrooms', 'NumOfBaths', 'bathrooms'])),
+      units: num(pick(hit, ['Units', 'NumOfUnits', 'units'])),
+      use: pick(hit, ['UseType', 'UseDescription', 'SpecificUseDetail1', 'usetype']),
+      situs: pick(hit, ['SitusAddress', 'situsaddress', 'Situs']),
       source: 'LA County Assessor public records',
     }, { headers: { 'Cache-Control': 'public, s-maxage=604800, stale-while-revalidate=86400' } })
   } catch (e) {
