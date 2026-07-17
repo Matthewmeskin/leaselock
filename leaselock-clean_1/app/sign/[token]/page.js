@@ -85,7 +85,10 @@ export default function SignReportPage() {
                   report.property.yearBuilt && `built ${report.property.yearBuilt}`,
                   report.property.use,
                 ].filter(Boolean).join(' · ')}
-                <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>Source: {report.property.source || 'public records'}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
+                  Source: {report.property.source || 'public records'}
+                  {report.property.units > 1 && <> · building-level record — the report below documents the tenant&apos;s individual unit</>}
+                </div>
               </div>
             )}
 
