@@ -7,6 +7,7 @@ export const metadata = {
 }
 
 const GUIDES = [
+  { slug: 'move-in-documentation-checklist', tag: 'Move-in', title: 'The move-in documentation checklist', desc: 'Everything to photograph and write down on day one, room by room.' },
   { slug: 'security-deposit-basics', tag: 'Deposits', title: 'Security deposit basics every renter should know', desc: 'What a landlord can and cannot keep, and how to get your money back.' },
   { slug: 'normal-wear-and-tear', tag: 'Move-out', title: 'Normal wear and tear vs damage', desc: 'The line that decides whether you pay. Real examples for each side.' },
   { slug: 'giving-notice-to-vacate', tag: 'Move-out', title: 'How to give notice to vacate the right way', desc: 'Miss the deadline and you could owe another month. Here is how to do it.' },
