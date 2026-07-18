@@ -1254,7 +1254,7 @@ function AppShell() {
         <div className="ax-mobnav">
           {NAV.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}
         </div>
-        <div className="ax-top"><h1>{TITLES[tab]}</h1><Link href="/" style={{ fontSize: 14, color: 'var(--ink-soft)', fontWeight: 500 }}>Home</Link></div>
+        <div className="ax-top"><h1>{TITLES[tab]}</h1></div>
         <div className="ax-body">
           {tab === 'home' && <Dashboard go={setTab} profile={profile} />}
           {tab === 'household' && <Household />}
