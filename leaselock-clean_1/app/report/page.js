@@ -211,6 +211,30 @@ export default function Report() {
   const [scanning, setScanning] = useState(false)
   const [scanNote, setScanNote] = useState('')
   useEffect(() => { setScanNote('') }, [roomIdx])
+  const SCAN_MSGS = ['Reading your photos', 'Checking walls and floors', 'Looking for damage or stains', 'Wrapping up']
+  const [scanMsgIdx, setScanMsgIdx] = useState(0)
+  useEffect(() => {
+    if (!scanning) { setScanMsgIdx(0); return }
+    const t = setInterval(() => setScanMsgIdx(i => Math.min(i + 1, SCAN_MSGS.length - 1)), 2200)
+    return () => clearInterval(t)
+  }, [scanning]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Small, low-quality copies just for the AI scan — a fraction of the bytes
+  // of the stored photos, which is most of the round-trip time.
+  function shrinkForScan(dataUrl, max = 512) {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const s = Math.min(1, max / Math.max(img.width, img.height))
+        const c = document.createElement('canvas')
+        c.width = Math.round(img.width * s); c.height = Math.round(img.height * s)
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
+        resolve(c.toDataURL('image/jpeg', 0.6))
+      }
+      img.onerror = () => resolve(dataUrl)
+      img.src = dataUrl
+    })
+  }
 
   // AI pre-assessment: look at the room's photos and pre-select the condition
   // and issue types. Only applies if the user hasn't chosen anything yet.
@@ -218,12 +242,15 @@ export default function Report() {
     if (!photos.length) return
     setScanning(true)
     try {
+      const scanPhotos = await Promise.all(photos.slice(0, 4).map(p => shrinkForScan(p)))
       const res = await fetch('/api/claude', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          fast: true,
+          maxTokens: 200,
           system: `You are inspecting move-in photos of a rental unit. Respond with ONLY valid JSON, no markdown fences, in this exact shape: {"condition":"good"|"issues","issues":[...],"note":"one short sentence on what you see"}. "issues" must be a subset of: ${ISSUE_TYPES.join(', ')}. Use "issues" only for clearly visible problems; normal furnishings and clean rooms are "good".`,
           user: `Room: ${roomName}. Assess the visible condition in these photos.`,
-          images: photos,
+          images: scanPhotos,
         }),
       })
       const data = await res.json()
@@ -595,8 +622,10 @@ export default function Report() {
           </div>
           <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} style={{ display: 'none' }} />
           {scanning && (
-            <div style={{ fontSize: 13, color: 'var(--brand)', fontWeight: 600, margin: '4px 0 8px' }}>
-              ✨ AI is checking your photos…
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, margin: '4px 0 8px' }}>
+              <span className="addr-spin" />
+              <span style={{ color: 'var(--brand)', fontWeight: 600 }}>✨ {SCAN_MSGS[scanMsgIdx]}…</span>
+              <span style={{ color: 'var(--ink-soft)' }}>you can keep going — we&apos;ll fill in the condition</span>
             </div>
           )}
           {!scanning && scanNote && (
