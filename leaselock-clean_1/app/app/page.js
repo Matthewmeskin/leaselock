@@ -727,12 +727,16 @@ function MoveInLauncher() {
             <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 4px', borderBottom: '1px solid var(--line)', fontSize: 14 }}>
               <span style={{ fontSize: 20 }}>📋</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.unit_address || 'Move-in report'}</div>
+                <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.property?.followupOf ? '🔁 ' : ''}{r.unit_address || 'Move-in report'}
+                </div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+                  {r.property?.followupOf ? 'Updated report · ' : ''}
                   Locked 🕐 {new Date(r.locked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                   {r.landlord_signed_at ? ` · ✍️ signed by ${r.landlord_name}` : ' · awaiting landlord signature'}
                 </div>
               </div>
+              <a className="bg2" style={{ textDecoration: 'none' }} href={`/report?update=${r.id}`} title="Start a follow-up inspection after the landlord fixed things">🔁 Re-inspect</a>
               <button className="bg2" onClick={() => window.open(`/sign/${r.token}`, '_blank', 'noopener')}>View</button>
             </div>
           ))}
@@ -1076,7 +1080,7 @@ function Documents() {
               <span style={{ fontSize: 20 }}>📋</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  Move-in report{r.unit_address ? ` — ${r.unit_address}` : ''}
+                  {r.property?.followupOf ? '🔁 Updated report' : 'Move-in report'}{r.unit_address ? ` — ${r.unit_address}` : ''}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
                   Locked 🕐 {new Date(r.locked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}

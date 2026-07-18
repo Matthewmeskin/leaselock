@@ -65,6 +65,7 @@ export default function Report() {
   const [step, setStep] = useState('rooms') // rooms | room-detail | review | generating | locked
   const [liveText, setLiveText] = useState('')
   const [saved, setSaved] = useState(null) // DB row once the report is stored (id, token, landlord signature)
+  const [updateOf, setUpdateOf] = useState(null) // original report when this is a follow-up re-inspection
   const [copied, setCopied] = useState(false)
   const [roomIdx, setRoomIdx] = useState(0)
   const [roomData, setRoomData] = useState({})
@@ -79,8 +80,35 @@ export default function Report() {
   useEffect(() => {
     track('movein_view')
     getProfile().then(p => { if (p) setProfile(p) }).catch(() => {})
+    const sp = new URLSearchParams(window.location.search)
+    // ?update=<id> starts a follow-up inspection that builds on a locked
+    // report: same rooms, previous issues shown, new report linked back.
+    const updateId = sp.get('update')
+    if (updateId) {
+      refreshMoveInReport(updateId).then(r => {
+        if (!r) return
+        setUpdateOf(r)
+        setUnitAddress(r.unit_address || '')
+        setTenantName(r.tenant_name || '')
+        const pr = r.property
+        if (pr && (pr.bedrooms || pr.sqft || pr.yearBuilt || pr.use || pr.units)) setProperty(pr)
+        const rooms = Array.isArray(r.rooms) ? r.rooms : []
+        if (rooms.length) {
+          setSelected(rooms.map(x => x.name))
+          setCustomRooms(rooms.filter(x => !ROOMS.some(b => b.name === x.name)).map(x => {
+            const base = ROOMS.find(b => x.name === b.name || x.name.startsWith(b.name + ' '))
+            return {
+              name: x.name, emoji: x.emoji || base?.emoji || '📍',
+              prompts: base?.prompts || ['Walls and ceiling', 'Flooring', 'Windows and doors', 'Fixtures and outlets'],
+              custom: true,
+            }
+          }))
+        }
+      }).catch(() => {})
+      return
+    }
     // ?new=1 skips the restore so "Start a new inspection" begins fresh.
-    if (new URLSearchParams(window.location.search).get('new') === '1') return
+    if (sp.get('new') === '1') return
     // Restore the most recent locked report so it survives refreshes.
     latestMoveInReport().then(r => {
       if (!r) return
@@ -328,6 +356,7 @@ export default function Report() {
           system: 'You are a renter protection assistant. Review the move-in photos and produce a professional, factual move-in condition report organized by room. Be specific about any damage, stains, or issues visible in the photos. Under 350 words. Plain text, no markdown.',
           user: `Unit: ${fullAddress || 'Not provided'}\nTenant: ${tenantName || 'Not provided'}`
             + (profileRows.length ? `\n\nTenant intake:\n${profileRows.map(r => `- ${r.question} ${r.answer}`).join('\n')}` : '')
+            + (updateOf ? `\n\nIMPORTANT: This is a FOLLOW-UP inspection after the landlord had a chance to fix the issues from the previous report (locked ${new Date(updateOf.locked_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}). Previously reported issues by room:\n${(updateOf.rooms || []).filter(x => x.status && !x.status.startsWith('Good')).map(x => `- ${x.name}: ${x.status}${x.note ? ` (${x.note})` : ''}`).join('\n') || '- none recorded'}\nTitle the report as an updated condition report. For each previously reported issue, state clearly whether it now appears RESOLVED or STILL PRESENT, then note any new issues.` : '')
             + `\n\nRoom-by-room log:\n${log}\n\nReview photos and write the report:`,
           images: allPhotos,
         }),
@@ -374,7 +403,11 @@ export default function Report() {
             photo_times: d.photoTimes || [],
           })
         }
-        const row = await saveMoveInReport({ unitAddress: fullAddress, tenantName, reportText: text, rooms: roomsSummary, property })
+        // The follow-up link rides in the property jsonb (no schema change needed).
+        const propertyPayload = updateOf
+          ? { ...(property || {}), followupOf: { id: updateOf.id, locked_at: updateOf.locked_at } }
+          : property
+        const row = await saveMoveInReport({ unitAddress: fullAddress, tenantName, reportText: text, rooms: roomsSummary, property: propertyPayload })
         setSaved(row)
       } catch (err) {
         console.error('Could not save report', err)
@@ -401,8 +434,16 @@ export default function Report() {
       </div>
       <div className="wz-body">
         <div className="wz-step-label">STEP 1 — SETUP</div>
-        <h1 className="wz-h">Let's document your unit.</h1>
+        <h1 className="wz-h">{updateOf ? 'Let’s re-inspect your unit.' : "Let's document your unit."}</h1>
         <p className="wz-p">We'll go room by room. Take photos, note any existing issues, and our AI writes the condition report. Takes about 5 minutes.</p>
+        {updateOf && (
+          <div style={{ background: 'var(--mint-soft)', border: '1px solid var(--line-strong)', borderRadius: 12, padding: '12px 16px', fontSize: 13.5, lineHeight: 1.55, marginBottom: 16 }}>
+            🔁 <b>Updated inspection</b> — building on your report from{' '}
+            {new Date(updateOf.locked_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.
+            Your rooms are pre-selected, each one shows what was wrong last time, and the new report will
+            record what the landlord fixed (and what they didn&apos;t).
+          </div>
+        )}
         <div className="wz-field">
           <label>Unit address</label>
           <AddressAutocomplete
@@ -522,6 +563,17 @@ export default function Report() {
         <div className="wz-step-label">ROOM {roomIdx + 1} OF {activeRooms.length}</div>
         <h1 className="wz-h">{room.name}</h1>
         <p className="wz-p">Photograph the spots that matter most, then note any existing issues.</p>
+        {(() => {
+          const prev = updateOf?.rooms?.find?.(x => x.name === room?.name)
+          if (!prev?.status) return null
+          const hadIssues = !prev.status.startsWith('Good')
+          return (
+            <div style={{ background: hadIssues ? '#fff7e8' : 'var(--mint-soft)', border: `1px solid ${hadIssues ? '#f0d9a8' : 'var(--line-strong)'}`, borderRadius: 12, padding: '10px 14px', fontSize: 13.5, lineHeight: 1.5, marginBottom: 14 }}>
+              🔁 <b>Last inspection:</b> {prev.status}{prev.note ? <> — &ldquo;{prev.note}&rdquo;</> : ''}.
+              {hadIssues ? ' Check whether it was fixed and photograph it either way.' : ' Confirm it still looks good.'}
+            </div>
+          )
+        })()}
 
         <div className="wz-field">
           <label>Photos</label>
@@ -706,6 +758,9 @@ export default function Report() {
             <div className="row"><span className="k">Rooms documented</span><span className="v">{Object.keys(roomData).length || (saved?.rooms?.length ?? 0)}</span></div>
             <div className="row"><span className="k">Photos taken</span><span className="v">{totalPhotos() || (saved?.rooms?.reduce((n, r) => n + (r.photos || 0), 0) ?? 0)}</span></div>
             <div className="row"><span className="k">Locked</span><span className="v">🔒 {lockTs}</span></div>
+            {saved?.property?.followupOf && (
+              <div className="row"><span className="k">Updates report from</span><span className="v">🔁 {new Date(saved.property.followupOf.locked_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span></div>
+            )}
             {saved?.landlord_signed_at && (
               <div className="row"><span className="k">Landlord signed</span><span className="v">✍️ {saved.landlord_name} · {new Date(saved.landlord_signed_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span></div>
             )}
@@ -803,6 +858,11 @@ export default function Report() {
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }} className="no-print">
             <button className="bp" onClick={() => { setEditingReport(false); setTimeout(() => window.print(), 60) }}>Print / save as PDF</button>
             <Link href="/app" className="bg2" style={{ padding: '12px 20px', borderRadius: 999, fontSize: 14.5, fontWeight: 600, color: 'var(--brand)', border: '1.5px solid var(--line-strong)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>Go to my dashboard</Link>
+            {saved && (
+              <a href={`/report?update=${saved.id}`} className="bg2" style={{ padding: '12px 20px', borderRadius: 999, fontSize: 14.5, fontWeight: 600, color: 'var(--brand)', border: '1.5px solid var(--line-strong)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                🔁 Re-inspect after fixes
+              </a>
+            )}
             <button className="bg2" onClick={() => {
               setSaved(null); setRoomData({}); setReportText(''); setEditingReport(false); setLiveText(''); setRoomIdx(0); setStep('rooms')
             }}>Start a new report</button>
