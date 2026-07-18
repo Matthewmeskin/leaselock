@@ -33,10 +33,14 @@ function friendlyError(e) {
   return { status: message.includes('ANTHROPIC_API_KEY') ? 503 : 500, message }
 }
 
+const FAST_MODEL = process.env.ANTHROPIC_FAST_MODEL || 'claude-haiku-4-5-20251001'
+
 export async function POST(req) {
   try {
     const client = getClient()
-    const { system, user, images, pdf, stream } = await req.json()
+    const { system, user, images, pdf, stream, fast, maxTokens } = await req.json()
+    const model = fast ? FAST_MODEL : MODEL
+    const max_tokens = Math.min(Math.max(parseInt(maxTokens, 10) || 2048, 64), 4096)
     const content = []
     if (pdf) {
       const data = pdf.includes(',') ? pdf.split(',')[1] : pdf
@@ -54,8 +58,8 @@ export async function POST(req) {
     if (stream) {
       // Stream text deltas as plain text so the client can render progress live.
       const msgStream = client.messages.stream({
-        model: MODEL,
-        max_tokens: 2048,
+        model,
+        max_tokens,
         system,
         messages: [{ role: 'user', content }],
       })
@@ -88,8 +92,8 @@ export async function POST(req) {
     }
 
     const msg = await client.messages.create({
-      model: MODEL,
-      max_tokens: 2048,
+      model,
+      max_tokens,
       system,
       messages: [{ role: 'user', content }],
     })
