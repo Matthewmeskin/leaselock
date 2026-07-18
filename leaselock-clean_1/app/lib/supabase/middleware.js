@@ -7,17 +7,22 @@ const PROTECTED_PREFIXES = ['/app', '/report']
 export async function updateSession(request) {
   let supabaseResponse = NextResponse.next({ request })
 
-  // Supabase email links fall back to the site root when the redirect URL
-  // isn't allowlisted — forward them to the auth callback so a first login
-  // lands in the dashboard instead of on the marketing page.
-  if (
-    request.nextUrl.pathname === '/' &&
-    (request.nextUrl.searchParams.has('code') || request.nextUrl.searchParams.has('token_hash'))
-  ) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/auth/callback'
-    if (!url.searchParams.has('redirect')) url.searchParams.set('redirect', '/app')
-    return NextResponse.redirect(url)
+  // Supabase auth links (OAuth + email) fall back to the configured Site URL
+  // when the redirect isn't allowlisted — whatever page that is. Catch the
+  // auth code on ANY path, finish the exchange in /auth/callback, and land
+  // on the dashboard.
+  {
+    const sp = request.nextUrl.searchParams
+    if (request.nextUrl.pathname !== '/auth/callback' && (sp.has('code') || sp.has('token_hash'))) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/callback'
+      url.search = ''
+      for (const k of ['code', 'token_hash', 'type']) {
+        if (sp.get(k)) url.searchParams.set(k, sp.get(k))
+      }
+      url.searchParams.set('redirect', sp.get('redirect') || '/app')
+      return NextResponse.redirect(url)
+    }
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
