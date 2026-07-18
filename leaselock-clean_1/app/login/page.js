@@ -3,6 +3,7 @@ import { useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Logo from '../components/Logo'
+import GoogleButton, { OrDivider } from '../components/GoogleButton'
 import { createClient } from '../lib/supabase/client'
 
 const inputStyle = {
@@ -131,6 +132,13 @@ function LoginInner() {
               <div style={{ marginTop: 16, background: '#fdecea', color: '#b3261e', border: '1px solid #f5c6c2', borderRadius: 10, padding: '10px 14px', fontSize: 13.5 }}>
                 {error}
               </div>
+            )}
+
+            {mode === 'login' && (
+              <>
+                <OrDivider />
+                <GoogleButton redirect={redirect} />
+              </>
             )}
 
             <p style={{ marginTop: 24, fontSize: 14, color: 'var(--ink-soft)', textAlign: 'center' }}>
