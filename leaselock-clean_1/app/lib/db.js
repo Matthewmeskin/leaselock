@@ -359,7 +359,7 @@ export async function listMoveInReports() {
   if (!user) return []
   const { data, error } = await supabase
     .from('shared_reports')
-    .select('id, token, unit_address, tenant_name, locked_at, landlord_name, landlord_signed_at, created_by')
+    .select('id, token, unit_address, tenant_name, locked_at, landlord_name, landlord_signed_at, created_by, property')
     .order('locked_at', { ascending: false })
   if (error) throw error
   return data || []

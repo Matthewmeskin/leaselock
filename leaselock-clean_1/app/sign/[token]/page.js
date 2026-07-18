@@ -67,14 +67,21 @@ export default function SignReportPage() {
         {state === 'ready' && report && (
           <>
             <div style={{ textAlign: 'center', margin: '10px 0 24px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', letterSpacing: '.06em' }}>MOVE-IN CONDITION REPORT</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)', letterSpacing: '.06em' }}>
+                {report.property?.followupOf ? 'UPDATED CONDITION REPORT' : 'MOVE-IN CONDITION REPORT'}
+              </div>
               <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28, margin: '6px 0 4px' }}>{report.unit_address || 'Rental unit'}</h1>
               <p style={{ fontSize: 14, color: 'var(--ink-soft)' }}>
                 Documented by {report.tenant_name || 'the tenant'} · locked {new Date(report.locked_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
+              {report.property?.followupOf && (
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>
+                  🔁 Follow-up to the inspection from {new Date(report.property.followupOf.locked_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })} — records which issues were fixed and which remain.
+                </p>
+              )}
             </div>
 
-            {report.property && (
+            {report.property && (report.property.bedrooms || report.property.sqft || report.property.yearBuilt || report.property.use || report.property.units) && (
               <div style={{ background: 'var(--mint-soft)', border: '1px solid var(--line-strong)', borderRadius: 16, padding: '14px 20px', marginBottom: 16, fontSize: 14, lineHeight: 1.55 }}>
                 🏠 <b>Property record:</b>{' '}
                 {[
