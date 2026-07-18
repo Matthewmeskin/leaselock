@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Logo from '../components/Logo'
+import GoogleButton, { OrDivider } from '../components/GoogleButton'
 import { createClient } from '../lib/supabase/client'
 import { track } from '../lib/analytics'
 
@@ -152,6 +153,8 @@ function SignupInner() {
               />
               <button type="submit" style={primaryBtn(false)}>Continue →</button>
             </form>
+            <OrDivider />
+            <GoogleButton redirect={redirect} />
           </>
         )}
 
