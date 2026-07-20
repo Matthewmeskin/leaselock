@@ -60,24 +60,23 @@ function downscale(file, max = 1100) {
 function Quiz({ onComplete }) {
   const [step, setStep] = useState(0)
   const [answers, setAnswers] = useState({})
-  const [selected, setSelected] = useState(null)
 
   const current = QUIZ_STEPS[step]
-  const pct = ((step) / QUIZ_STEPS.length) * 100
+  // Selecting never auto-advances (easy to fat-finger on a phone) — the
+  // choice highlights, and Next/Confirm moves on. Back re-opens earlier
+  // steps with the previous answer still selected.
+  const selected = answers[current.id] ?? null
 
   function pick(val) {
-    setSelected(val)
-    // Short delay so user sees the selection before advancing
-    setTimeout(() => {
-      const next = { ...answers, [current.id]: val }
-      setAnswers(next)
-      if (step < QUIZ_STEPS.length - 1) {
-        setStep(s => s + 1)
-        setSelected(null)
-      } else {
-        onComplete(next)
-      }
-    }, 280)
+    setAnswers(a => ({ ...a, [current.id]: val }))
+  }
+  function next() {
+    if (selected == null) return
+    if (step < QUIZ_STEPS.length - 1) setStep(s => s + 1)
+    else onComplete(answers)
+  }
+  function back() {
+    if (step > 0) setStep(s => s - 1)
   }
 
   return (
@@ -121,6 +120,26 @@ function Quiz({ onComplete }) {
             </button>
           ))}
         </div>
+
+        {/* Back / Next controls — no auto-advance */}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 26 }}>
+          {step > 0 && (
+            <button className="bg2" onClick={back} style={{ minWidth: 96 }}>← Back</button>
+          )}
+          <button
+            className="bp"
+            onClick={next}
+            disabled={selected == null}
+            style={{ minWidth: 150, opacity: selected == null ? 0.45 : 1, cursor: selected == null ? 'default' : 'pointer' }}
+          >
+            {step < QUIZ_STEPS.length - 1 ? 'Next →' : 'Confirm ✓'}
+          </button>
+        </div>
+        {selected == null && (
+          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-soft)', marginTop: 10 }}>
+            Pick an answer, then hit Next.
+          </p>
+        )}
       </div>
     </div>
   )
