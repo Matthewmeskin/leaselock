@@ -219,9 +219,10 @@ export default function Report() {
     return () => clearInterval(t)
   }, [scanning]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Small, low-quality copies just for the AI scan — a fraction of the bytes
-  // of the stored photos, which is most of the round-trip time.
-  function shrinkForScan(dataUrl, max = 512) {
+  // Slimmed copies just for the AI scan. 1024px keeps hairline cracks and
+  // chipped tile visible — 512px crushed them into mush and the scan
+  // missed real damage.
+  function shrinkForScan(dataUrl, max = 1024) {
     return new Promise((resolve) => {
       const img = new Image()
       img.onload = () => {
@@ -229,7 +230,7 @@ export default function Report() {
         const c = document.createElement('canvas')
         c.width = Math.round(img.width * s); c.height = Math.round(img.height * s)
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
-        resolve(c.toDataURL('image/jpeg', 0.6))
+        resolve(c.toDataURL('image/jpeg', 0.72))
       }
       img.onerror = () => resolve(dataUrl)
       img.src = dataUrl
@@ -246,10 +247,9 @@ export default function Report() {
       const res = await fetch('/api/claude', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fast: true,
-          maxTokens: 200,
-          system: `You are inspecting move-in photos of a rental unit. Respond with ONLY valid JSON, no markdown fences, in this exact shape: {"condition":"good"|"issues","issues":[...],"note":"one short sentence on what you see"}. "issues" must be a subset of: ${ISSUE_TYPES.join(', ')}. Use "issues" only for clearly visible problems; normal furnishings and clean rooms are "good".`,
-          user: `Room: ${roomName}. Assess the visible condition in these photos.`,
+          maxTokens: 300,
+          system: `You are a meticulous home inspector reviewing move-in photos of a rental unit. Damage is usually a SMALL part of a wide photo — examine walls, ceilings, tile, grout, counters, floors, doors, and fixtures section by section. Look specifically for: cracks or holes in walls/plaster, peeling or bubbling paint, chipped/cracked/missing tile, stains, water damage, mold, scuffs, and broken or missing fixtures. Respond with ONLY valid JSON, no markdown fences, in this exact shape: {"condition":"good"|"issues","issues":[...],"note":"one short sentence naming what you found and where"}. "issues" must be a subset of: ${ISSUE_TYPES.join(', ')}. Only mark "good" if you examined every area and found no visible defects at all — when in doubt, flag it.`,
+          user: `Room: ${roomName}. Inspect these photos carefully for any visible damage or defects, even small ones.`,
           images: scanPhotos,
         }),
       })
