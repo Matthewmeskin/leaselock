@@ -1276,6 +1276,7 @@ function AppShell() {
       <main className="ax-main">
         <div className="ax-mobnav">
           {NAV.map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}
+          <button onClick={handleSignOut} style={{ marginLeft: 'auto' }}>⇥ Sign out</button>
         </div>
         <div className="ax-top"><h1>{TITLES[tab]}</h1></div>
         <div className="ax-body">
