@@ -94,7 +94,7 @@ export default function Landing() {
               <Link href="/app" className="btn btn-mint" style={{ marginTop: 18 }}>Start a free inspection →</Link>
             </div>
             <div className="feat-visual">
-              <div className="fv-card"><div className="h">🛏 Bedroom · 4 photos</div><div className="s">Scuff on north wall, stain near closet</div></div>
+              <div className="fv-card"><div className="h">🛌 Bedroom · 4 photos</div><div className="s">Scuff on north wall, stain near closet</div></div>
               <div className="fv-card"><div className="h">🚿 Bathroom · 2 photos</div><div className="s">Cracked tile behind door logged</div></div>
               <div><span className="fv-chip">🔒 Report locked and delivered</span></div>
             </div>
