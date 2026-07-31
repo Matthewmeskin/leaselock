@@ -219,37 +219,28 @@ export default function Report() {
     return () => clearInterval(t)
   }, [scanning]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Slimmed copies just for the AI scan. 1024px keeps hairline cracks and
-  // chipped tile visible — 512px crushed them into mush and the scan
-  // missed real damage.
-  function shrinkForScan(dataUrl, max = 1024) {
-    return new Promise((resolve) => {
-      const img = new Image()
-      img.onload = () => {
-        const s = Math.min(1, max / Math.max(img.width, img.height))
-        const c = document.createElement('canvas')
-        c.width = Math.round(img.width * s); c.height = Math.round(img.height * s)
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
-        resolve(c.toDataURL('image/jpeg', 0.72))
-      }
-      img.onerror = () => resolve(dataUrl)
-      img.src = dataUrl
-    })
-  }
-
   // AI pre-assessment: look at the room's photos and pre-select the condition
   // and issue types. Only applies if the user hasn't chosen anything yet.
+  // Photos go up at stored quality (already ≤1100px) — recompressing washed
+  // out faint stains and hairline cracks. Enumerating every surface before
+  // the verdict forces the model to actually look at each one.
   async function analyzeRoomPhotos(roomName, photos) {
     if (!photos.length) return
     setScanning(true)
     try {
-      const scanPhotos = await Promise.all(photos.slice(0, 4).map(p => shrinkForScan(p)))
+      const scanPhotos = photos.slice(0, 4)
       const res = await fetch('/api/claude', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          maxTokens: 300,
-          system: `You are a meticulous home inspector reviewing move-in photos of a rental unit. Damage is usually a SMALL part of a wide photo — examine walls, ceilings, tile, grout, counters, floors, doors, and fixtures section by section. Look specifically for: cracks or holes in walls/plaster, peeling or bubbling paint, chipped/cracked/missing tile, stains, water damage, mold, scuffs, and broken or missing fixtures. Respond with ONLY valid JSON, no markdown fences, in this exact shape: {"condition":"good"|"issues","issues":[...],"note":"one short sentence naming what you found and where"}. "issues" must be a subset of: ${ISSUE_TYPES.join(', ')}. Only mark "good" if you examined every area and found no visible defects at all — when in doubt, flag it.`,
-          user: `Room: ${roomName}. Inspect these photos carefully for any visible damage or defects, even small ones.`,
+          maxTokens: 600,
+          system: `You are a meticulous home inspector documenting a rental unit at move-in to protect the TENANT's security deposit. Inspect every surface individually: each wall, ceiling, floor area, tile/grout, counter, door, and fixture.
+
+FLAG (these cost tenants their deposits): stains and faint discoloration — yellowed or brownish patches and water stains on painted walls are easy to dismiss as lighting but are real defects; cracks or holes in walls/plaster; peeling or bubbling paint; chipped/cracked/missing tile; mold; damage or heavy wear; broken, loose, or missing fixtures; pest evidence; dirt.
+
+DO NOT FLAG: the landlord's design and furnishings — wallpaper, paint colors, mounted shelves, appliances, furniture, and decor are features of the unit, not defects. Never speculate about lease consequences or removal difficulty. Glare or photo quality is not a defect. Trivial construction quirks (hairline molding gaps, a couple of small nail holes) may be mentioned in the note, but they do NOT make the condition "issues".
+
+Respond with ONLY valid JSON, no markdown fences, in this exact shape: {"surfaces":[{"area":"e.g. left wall","state":"ok"|"issue","what":"brief, empty if ok"}],"condition":"good"|"issues","issues":[...],"note":"one short sentence naming what you found and where"}. List EVERY visible surface in "surfaces" before deciding "condition". "issues" must be a subset of: ${ISSUE_TYPES.join(', ')}. Conclude "issues" only for genuine damage/defects from the FLAG list; a clean room with distinctive decor is "good".`,
+          user: `Room: ${roomName}. Inspect these photos surface by surface. Flag genuine damage, staining, or defects — however faint — but not design features or furnishings.`,
           images: scanPhotos,
         }),
       })
