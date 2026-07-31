@@ -121,22 +121,24 @@ function Quiz({ onComplete }) {
           ))}
         </div>
 
-        {/* Back / Next controls — no auto-advance */}
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 26 }}>
+        {/* Back / Next controls — no auto-advance. Sized to match the option cards. */}
+        <div style={{ display: 'flex', gap: 12, marginTop: 28 }}>
           {step > 0 && (
-            <button className="bg2" onClick={back} style={{ minWidth: 96 }}>← Back</button>
+            <button className="bg2" onClick={back} style={{ padding: '15px 24px', borderRadius: 16, fontSize: 15 }}>
+              ← Back
+            </button>
           )}
           <button
             className="bp"
             onClick={next}
             disabled={selected == null}
-            style={{ minWidth: 150, opacity: selected == null ? 0.45 : 1, cursor: selected == null ? 'default' : 'pointer' }}
+            style={{ flex: 1, justifyContent: 'center', padding: '15px 24px', borderRadius: 16, fontSize: 16 }}
           >
             {step < QUIZ_STEPS.length - 1 ? 'Next →' : 'Confirm ✓'}
           </button>
         </div>
         {selected == null && (
-          <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--ink-soft)', marginTop: 10 }}>
+          <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 10 }}>
             Pick an answer, then hit Next.
           </p>
         )}
