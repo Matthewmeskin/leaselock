@@ -41,7 +41,7 @@ const ROOMS = [
   { name: 'Entry & hallway', emoji: '🚪', prompts: ['Front door and locks', 'Walls and ceiling', 'Flooring', 'Light switches and outlets'] },
   { name: 'Living room', emoji: '🛋️', prompts: ['Walls and ceiling', 'Flooring / carpet', 'Windows and blinds', 'Electrical outlets', 'Light fixtures'] },
   { name: 'Kitchen', emoji: '🍳', prompts: ['Countertops and cabinets', 'Appliances (stove, fridge, dishwasher)', 'Sink and faucet', 'Flooring', 'Walls and ceiling'] },
-  { name: 'Bedroom', emoji: '🛏️', prompts: ['Walls and ceiling', 'Flooring / carpet', 'Closet and doors', 'Windows and blinds', 'Electrical outlets'] },
+  { name: 'Bedroom', emoji: '🛌', prompts: ['Walls and ceiling', 'Flooring / carpet', 'Closet and doors', 'Windows and blinds', 'Electrical outlets'] },
   { name: 'Bathroom', emoji: '🚿', prompts: ['Toilet and flush mechanism', 'Tub / shower and grout', 'Sink and vanity', 'Mirror and fixtures', 'Tiles and caulking', 'Ventilation fan'] },
   { name: 'Laundry area', emoji: '🫧', prompts: ['Washer / dryer or hookups', 'Flooring', 'Venting and connections'] },
   { name: 'Outdoor / patio', emoji: '🌿', prompts: ['Deck or patio surface', 'Fencing or railings', 'Exterior doors and locks'] },

@@ -423,8 +423,8 @@ function LeaseReview({ profile }) {
 }
 
 /* ---------- Move-in (photos + vision) ---------- */
-const ROOMS = [['Living room', '🛋️'], ['Kitchen', '🍳'], ['Bedroom', '🛏️'], ['Bathroom', '🚿'], ['Entryway', '🚪'], ['Other', '📦']]
-const FURNISHED_ITEMS = [['Sofa', '🛋️'], ['Dining table', '🍽️'], ['Bed frame', '🛏️'], ['Mattress', '😴'], ['Dresser', '🗄️'], ['TV', '📺']]
+const ROOMS = [['Living room', '🛋️'], ['Kitchen', '🍳'], ['Bedroom', '🛌'], ['Bathroom', '🚿'], ['Entryway', '🚪'], ['Other', '📦']]
+const FURNISHED_ITEMS = [['Sofa', '🛋️'], ['Dining table', '🍽️'], ['Bed frame', '🛌'], ['Mattress', '😴'], ['Dresser', '🗄️'], ['TV', '📺']]
 
 function MoveIn({ profile }) {
   const [room, setRoom] = useState('Living room')
