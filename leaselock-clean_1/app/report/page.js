@@ -232,7 +232,7 @@ export default function Report() {
       const res = await fetch('/api/claude', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          maxTokens: 600,
+          maxTokens: 800,
           system: `You are a meticulous home inspector documenting a rental unit at move-in to protect the TENANT's security deposit. Inspect every surface individually: each wall, ceiling, floor area, tile/grout, counter, door, and fixture.
 
 FLAG (these cost tenants their deposits): stains and faint discoloration — yellowed or brownish patches and water stains on painted walls are easy to dismiss as lighting but are real defects; cracks or holes in walls/plaster; peeling or bubbling paint; chipped/cracked/missing tile; mold; damage or heavy wear; broken, loose, or missing fixtures; pest evidence; dirt.
@@ -257,8 +257,10 @@ Respond with ONLY valid JSON, no markdown fences, in this exact shape: {"surface
       )
       setRoomData(d => {
         const cur = d[roomName] || { photos, issues: [], allGood: false, note: '' }
-        // Respect anything the user already chose.
-        if (cur.cond || cur.allGood || (cur.issues?.length ?? 0) > 0) return d
+        // The user's own choice always wins — but the AI may revise its own
+        // earlier suggestion when new photos arrive (aiSuggested marks that).
+        const humanChoice = (cur.cond || cur.allGood || (cur.issues?.length ?? 0) > 0) && !cur.aiSuggested
+        if (humanChoice) return d
         const foundIssues = Array.isArray(parsed.issues) ? parsed.issues.filter(i => ISSUE_TYPES.includes(i)) : []
         if (parsed.condition === 'issues' && foundIssues.length) {
           return { ...d, [roomName]: { ...cur, cond: 'issues', allGood: false, issues: foundIssues, note: cur.note || parsed.note || '', aiSuggested: true } }
@@ -324,7 +326,7 @@ Respond with ONLY valid JSON, no markdown fences, in this exact shape: {"surface
   function toggleIssue(type) {
     const turningOn = !current.issues.includes(type)
     const issues = turningOn ? [...current.issues, type] : current.issues.filter(x => x !== type)
-    updateRoom({ issues, allGood: false, cond: 'issues' })
+    updateRoom({ issues, allGood: false, cond: 'issues', aiSuggested: false })
     if (type === 'Other' && turningOn) {
       setTimeout(() => {
         noteRef.current?.focus()
@@ -333,7 +335,7 @@ Respond with ONLY valid JSON, no markdown fences, in this exact shape: {"surface
     }
   }
 
-  function markAllGood() { updateRoom({ allGood: true, issues: [] }) }
+  function markAllGood() { updateRoom({ allGood: true, issues: [], aiSuggested: false }) }
 
   function nextRoom() {
     if (roomIdx < activeRooms.length - 1) { setRoomIdx(i => i + 1) }
@@ -639,10 +641,10 @@ Respond with ONLY valid JSON, no markdown fences, in this exact shape: {"surface
         <div className="wz-field">
           <label>Condition</label>
           <div className="cond-toggle">
-            <button type="button" className={`cond-seg good ${condGood ? 'on' : ''}`} onClick={() => updateRoom({ cond: 'good', allGood: true, issues: [] })}>
+            <button type="button" className={`cond-seg good ${condGood ? 'on' : ''}`} onClick={() => updateRoom({ cond: 'good', allGood: true, issues: [], aiSuggested: false })}>
               <span className="cond-ico">✓</span> Looks good
             </button>
-            <button type="button" className={`cond-seg issues ${condIssues ? 'on' : ''}`} onClick={() => updateRoom({ cond: 'issues', allGood: false })}>
+            <button type="button" className={`cond-seg issues ${condIssues ? 'on' : ''}`} onClick={() => updateRoom({ cond: 'issues', allGood: false, aiSuggested: false })}>
               <span className="cond-ico">!</span> Has issues
             </button>
           </div>
